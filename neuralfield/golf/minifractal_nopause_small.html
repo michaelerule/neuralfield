@@ -1,0 +1,9 @@
+<canvas><script>v=document.body.lastChild
+V=v.getContext('2d');m=V.getImageData(g=f=0,0,v.width=v.height=N=512,N)
+C=()=>Uint8Array(L=N*N);A=C(I=16);B=C(n=256)
+v.onmousemove=(e)=>{f=e.offsetX*I;g=e.offsetY*I}
+R=()=>{for(i=L;i--;){x=i&511;y=i/N;a=(x*x-y*y)/8+(y-x)*64+f
+b=x*y/4-(y+x)*64+N*32+g;w=a>>4;z=b>>4;j=w+z*N;a&=15;b&=15;w-=n;z-=n;c=n
+if(w*w+z*z<L/5)c=(A[j]*(I-a)+A[j+1]*a)*(I-b)+(A[j+N]*(I-a)+A[j+N+1]*a)*b>>8
+m.data[i*4+3]=n-(B[i]=(c*=.96))}V.putImageData(m,0,0);T=B;B=A;A=T;setTimeout(R,0)}
+R()</script>

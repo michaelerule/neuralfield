@@ -1,0 +1,11 @@
+<canvas><script>v=document.body.lastChild
+V=v.getContext('2d')
+m=V.getImageData(f=0,0,v.width=v.height=N=512,N)
+L=N*N
+A=[]
+I=16
+n=256
+R=()=>{for(i=L;i--;)x=i&511,y=i/N,a=(x*x-y*y)/8+(y-x)*64+f.offsetX*I,b=x*y/4-(y+x)*64+N*32+f.offsetY*I,w=a>>4,z=b>>4,j=w+z*N,a&=15,b&=15,w-=n,z-=n,c=n,w*w+z*z<L/5&&(c=A[j]),m.data[i*4+3]=n-(A[i]=(c*=.96))
+V.putImageData(m,0,0)
+setTimeout(R,0)}
+R(v.onmousemove=e=>f=e)</script>

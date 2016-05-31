@@ -1,0 +1,592 @@
+<html>
+<head>
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+<meta content="utf-8" http-equiv="encoding">
+<title>Hi there</title>
+<!-- Flicker javascript demo (c) Michael Rule 2015 --> 
+<style>
+body{
+    margin: 0;
+    padding: 0;
+    font-family: Sans !important;
+}
+
+#maincanvas {
+    margin: auto;
+    padding: 0;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+	/* FOR NOW, THE WIDTH AND HEIGHT MUST BE POWERS OF 2!!! */
+    width:512px;/*100%;*/
+    height:512px;/*100%;*/
+	
+    image-rendering: optimizeSpeed;
+	/*
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: optimize-contrast;
+    -ms-interpolation-mode: nearest-neighbor;*/
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+
+#canvasdiv {
+    margin: auto;
+    padding: 0;
+    background-color:#00f;
+    /*display: table-cell;
+    vertical-align: top;*/
+	/* FOR NOW, THE WIDTH AND HEIGHT MUST BE POWERS OF 2!!! */
+    width:512px;/*100%;*/
+    height:512px;/*100%;*/
+	/* vertical center it */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+
+.pcursor {
+    width:  11px;
+    height: 11px;
+    margin: -11 0;
+    background-color: #aaa;
+    border: solid 1px #888;
+	position: relative;
+    /* rounded corners ( does not work in opera, IE ) */
+    -moz-border-radius:    6px;
+    -webkit-border-radius: 6px;
+    -khtml-border-radius:  6px;
+    border-radius:         6px;
+    cursor: pointer !important;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+.pslidercontainer {
+    width: 300px;
+    height:13px;
+    padding: 25 0 5 0;
+    float: center;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+    margin: auto;
+}
+.pslidername {
+	line-height: 13px;
+    width: 50px;
+    float: left;
+    font-size:10pt;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+.pslider {
+    width: 200px;
+    height:13px;
+    float: right;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+.pslider_core {
+    width: 100%;
+    height:1px;
+    margin: 6 0 4 0;
+    background-color: #aaa;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+</style>
+
+</head>
+<body onload="javascript:main()">
+<div id="controls">
+</div>
+<div id='canvasdiv'>
+    <canvas id='maincanvas' >This application relies on the HTML5 Canvas element and Javascript. If you have Javascript disabled, try re-enabling it for this page.</canvas>
+<br clear="all"/>
+<div class="pslidercontainer">
+	<div class="pslidername">Stimulation ∈ [0,1]</div>
+	<div class="pslider" id="slider1"><div class="pslider_core" id="core1"></div>
+	<div class="pcursor" id="cursor1"></div></div>
+</div>
+</div>
+
+<script type="text/javascript">
+
+function gaussianKernel(sigma) { 
+	/* Gausian kernel.
+	
+	Explicitly normalized to sum to 1, since simply
+	evaluating normal PDF at a collection of discrete points
+	will not guarantee that the discrete approximation
+	sums to 1
+	
+	We're a little stingy with the number of discrete points
+	approximating the kernel. We're favoring speed over 
+	accuracy in this case. 
+	*/
+	var N = Math.ceil(sigma*2)*2+1;
+	var center = Math.floor(N/2);
+    var kernel = new Float32Array(new ArrayBuffer(N*4));
+	var sum = 0.0;
+	for (var i=0; i<N; i++) {
+		var x = i-center
+		kernel[i]=Math.exp(-x*x/(2*sigma*sigma));
+		sum += kernel[i];
+	}
+	var normalization = 1./sum;
+	for (var i=0; i<N; i++) {
+		kernel[i]*=normalization;
+	}
+	return kernel;
+}
+
+function blurGaussianFloat32SeparableNoWrap(buffer,output,temp,W,H,sigma) {
+	/* 
+	Execute 2D Gaussian blur with standard deviation sigma over the 
+	data "buffer" with dimensions 'w' x 'h'. using the buffer temp which
+	is the same size as "buffer". 
+	
+	This verion uses Zero rather than periodic boundary conditions.
+	
+	This uses separable convoultion approach. 
+	
+	This uses the weird almost toroidal map that takes advantage
+	of the row-major ordering of arrays in memory.
+	
+	TODO: must assert that total array size is a power of two for this 
+	to work. For now we just enforce this elsewhere as an invariant.
+	
+	this modifies both "in" and "temp" in place.
+	*/
+	var kernel = gaussianKernel(sigma);
+	var N = kernel.length;
+	var N2 = Math.floor(N/2);
+	for (var y=0;y<H;++y) 
+    for (var x=0;x<W;++x) {
+		var sum = 0.0;
+		var denom = 0;
+		for (var k=0; k<N; k++) {
+		    var i = k+x-N2;
+		    if (i>=0 && i<W) {
+    			sum   += kernel[k]*buffer[i+W*y];
+    			denom += kernel[k];
+			}
+		}
+		temp[x+W*y] = sum/denom;
+    }
+	for (var y=0;y<H;++y) 
+    for (var x=0;x<W;++x) {
+		var sum = 0.0;
+		var denom = 0;
+		for (var k=0; k<N; k++) {
+		    var i = k+y-N2;
+		    if (i>=0 && i<H) {
+    			sum   += kernel[k]*temp[W*i+x];
+    			denom += kernel[k];
+			}
+		}
+		output[x+W*y] = sum/denom;
+    }
+}
+
+
+function main() {
+    /* 
+	Prepare rendering canvas 
+	
+	The canvas element and the div that contains it are identified by Id
+	
+	There is a scaling factor between the size of the image buffer that backs
+	the canvas, and the actual displayed size of the canvas. These computations
+	are very expensive, so we run the simulation at a resolution that is 
+	courser than the display.
+	
+	The downscale variable is a power of 2. So a downscale value of "2" 
+	corresponds to a scaling factor of 4. 
+	
+	We exctract the canvas context and the image data object from that
+	context. We use the context to blit pixels to the canvas later. 
+	
+	The image data is a byte packed int32 ARGB format. We create a Uint32
+	"view" of this data buffer which can be accessed as an array "data". 
+	
+	This image buffer is initialized with a checkerboard pattern to verify 
+	that everything is properly configured.
+	*/
+    var canvas = document.getElementById('maincanvas');
+    var frame  = document.getElementById('canvasdiv');
+	
+    var downscale = 3;
+    var W  = frame.clientWidth >>downscale;
+    var H  = frame.clientHeight>>downscale;
+    canvas.width  = W; 
+    canvas.height = H; 
+	
+    var ctx = canvas.getContext('2d');
+    var imageData = ctx.getImageData(0,0,W,H);
+    var data = new Uint32Array(imageData.data.buffer);
+	
+    for (var y=0;y<H;y++)
+        for (var x=0;x<W;++x)
+            data[x+W*y] = 0xff000000 | ((x^y)&1)*0xffffff;
+    ctx.putImageData(imageData, 0, 0);       
+    
+    /*
+    Generate the Parula colormap from matlab, in a format that we can
+    access quckly for rapid rendering
+    */
+    var parula_BGR =
+    [0x872a35,0x8a2b35,0x8d2d35,0x902e35,0x933036,0x963136,0x993336,0x9c3436,
+    0x9f3636,0xa23736,0xa63935,0xa93b35,0xac3c35,0xaf3e34,0xb23f34,0xb54133,
+    0xb94332,0xbc4431,0xbf462f,0xc2482d,0xc64a2c,0xc94b29,0xcc4d27,0xcf4f24,
+    0xd35221,0xd6541d,0xd85619,0xdb5814,0xdd5b10,0xde5d0c,0xdf5f08,0xe06005,
+    0xe06203,0xe16302,0xe16501,0xe16601,0xe16701,0xe16801,0xe16a02,0xe06b02,
+    0xe06c03,0xe06d04,0xdf6e05,0xdf6f06,0xde7007,0xde7108,0xdd720a,0xdd730b,
+    0xdc740c,0xdc750d,0xdb760e,0xdb770e,0xda780f,0xda7910,0xd97a10,0xd97b11,
+    0xd87c12,0xd77d12,0xd77e13,0xd67e13,0xd67f13,0xd58013,0xd58114,0xd48214,
+    0xd48314,0xd48414,0xd38614,0xd38713,0xd38813,0xd28913,0xd28a12,0xd28b11,
+    0xd28d11,0xd28e10,0xd28f0f,0xd2900e,0xd2920d,0xd2930c,0xd1940b,0xd1950a,
+    0xd19709,0xd19808,0xd09908,0xd09a07,0xd09b07,0xcf9c06,0xcf9d06,0xce9e06,
+    0xcd9f06,0xcda006,0xcca106,0xcba205,0xcaa205,0xcaa305,0xc9a405,0xc8a505,
+    0xc7a505,0xc6a605,0xc5a705,0xc4a806,0xc3a806,0xc2a906,0xc1aa07,0xc0aa07,
+    0xbfab08,0xbeab09,0xbcac0a,0xbbad0b,0xbaad0d,0xb9ae0e,0xb8ae10,0xb7af11,
+    0xb5b013,0xb4b014,0xb3b116,0xb2b118,0xb0b21a,0xafb21c,0xaeb31e,0xacb320,
+    0xabb422,0xaab424,0xa8b526,0xa7b528,0xa6b62a,0xa4b62c,0xa3b72f,0xa1b731,
+    0xa0b833,0x9eb836,0x9db938,0x9bb93b,0x9aba3d,0x98ba40,0x97ba43,0x95bb45,
+    0x94bb48,0x92bc4b,0x91bc4e,0x8fbc51,0x8ebd53,0x8cbd56,0x8bbd59,0x89bd5c,
+    0x88be5f,0x86be62,0x85be65,0x84be68,0x82be6b,0x81be6e,0x80be71,0x7ebf74,
+    0x7dbf77,0x7cbf7a,0x7bbf7c,0x7abf7f,0x79bf82,0x77bf85,0x76bf87,0x75bf8a,
+    0x74bf8c,0x73bf8f,0x72bf91,0x71be94,0x70be96,0x6fbe99,0x6ebe9b,0x6dbe9e,
+    0x6cbea0,0x6bbea2,0x6abea5,0x69bea7,0x69bea9,0x68bdac,0x67bdae,0x66bdb0,
+    0x65bdb2,0x64bdb4,0x63bdb7,0x62bcb9,0x62bcbb,0x61bcbd,0x60bcbf,0x5fbcc1,
+    0x5ebcc3,0x5dbbc6,0x5cbbc8,0x5cbbca,0x5bbbcc,0x5abbce,0x59bbd0,0x58bad2,
+    0x57bad4,0x56bad6,0x56bad8,0x55bada,0x54badc,0x53b9de,0x52b9e0,0x51b9e2,
+    0x50b9e4,0x4fb9e6,0x4eb9e8,0x4db9ea,0x4cb9ec,0x4bb9ee,0x4ab9f0,0x48b9f2,
+    0x47b9f4,0x46b9f6,0x44baf7,0x43baf9,0x41bbfa,0x3fbcfc,0x3ebdfd,0x3cbefe,
+    0x3ac0fe,0x39c1fe,0x38c2ff,0x36c3fe,0x35c5fe,0x34c6fe,0x32c7fe,0x31c9fd,
+    0x30cafd,0x2fcbfd,0x2ecdfc,0x2dcefb,0x2ccffb,0x2bd0fa,0x2ad2fa,0x29d3f9,
+    0x28d4f9,0x27d6f8,0x26d7f7,0x25d8f7,0x24daf6,0x23dbf6,0x22ddf5,0x21def5,
+    0x20dff5,0x1fe1f5,0x1de3f4,0x1ce4f4,0x1be6f4,0x1ae7f4,0x19e9f4,0x18ebf4,
+    0x16edf5,0x15eff5,0x14f1f6,0x13f2f6,0x11f4f7,0x10f6f7,0xff8f8,0xdfaf9];
+    var parula_colors = new Uint32Array(new ArrayBuffer(256*4));
+    for (var i=0; i<256; i++) 
+        parula_colors[i] = parula_BGR[i]|0xff000000;
+
+    /*
+    Configure controls and user interface.
+    This is copied and modified from an earlier project, 
+    might be a little sloppy.
+    
+    The variable "running", which pauses/plays the simulation, is also 
+    defined at this time.
+    */
+    var running = 1;
+    
+	var cursors = new Array();
+	var sliders = new Array();
+	var slcores = new Array();
+	var cursor_selected = -1;
+	var SLR = document.getElementById('cursor1').offsetWidth/2;
+	var SLW = document.getElementById('slider1').offsetWidth;
+	var SLX = document.getElementById('slider1').getBoundingClientRect().left;
+	console.log(SLR);
+	console.log(SLW);
+	function updateCursor(i,x) {
+		console.log(i,x,SLR,SLX,sliders[i].offsetLeft);
+		x = x-SLR-SLX;
+		cursors[i].style.left   = x<0?0:x>SLW-2*SLR?SLW-2*SLR:x;
+		cursors[i].style.cursor = 'pointer';
+		console.log(i,x);
+	}
+	// initialize all the sliders
+	// there is only one at the moment but we're keeping the code general
+	for (var i=1; i<=1; i++) {
+		cursors[i] = document.getElementById('cursor'+i);
+		sliders[i] = document.getElementById('slider'+i);
+		slcores[i] = document.getElementById('core'+i);
+		cursors[i].onselectstart = function(){ return false; }
+		sliders[i].onselectstart = function(){ return false; }
+		slcores[i].onselectstart = function(){ return false; }
+		cursors[i].onmousedown = (function(i) { 
+			return function(e) {
+			    updateCursor(cursor_selected = i,e.screenX);
+			    running = 0;
+			};
+		})(i);
+	}
+	document.onmouseup   = function(e) {
+	    cursor_selected = -1;
+	    running = 1;
+		if (running) setTimeout(iterate, 0);
+    }
+	document.onmousemove = function(e) {
+	    if (cursor_selected>0) 
+	        updateCursor(cursor_selected,e.clientX,e.clientY);
+    }
+    
+	/* 
+	Prepare data structures for simulation
+	
+	We do not use the image display buffer for simulation. The simulation 
+	is the usual two-population laterally coupled Wilson-cowan equations.
+	
+	Te dUe/dt = -Ue + F(Wee•Ue-Wei•Ui+Je(t)+He)
+	Ti dUi/dt = -Ui + F(Wie•Ue-Wii•Ui+Ji(t)+Hi)
+	F(x) = 1/(1+exp(-a(x-b)))
+	
+	<•> is convolution, Wee Wei Wie Wii are 2D Gaussian kernels with
+	standard deviation S. The excitatory and inhibitory spreads 
+	are the same for both types of connections, i.e. See=Sei, Sie=Sii
+	Also, See > Sii. The excitatory spread is larger than the 
+	inhibitory. 
+	
+	The parameters a and b can be absorbed into rescalings of the
+	coupling weights W and adjustment of biase terms H
+	
+	J is an external time and space varying input
+	
+	We need four buffers to model this system. For each of the E and I
+	population we need a buffer to store the current values Ue and Ui
+	and also a buffer to store the intermediate results of a 
+	convolution, defining the lateral connectivity. Buffers are
+	initialized by number of bytes, and float32s take up 4 butes.
+	*/
+
+	dt  = 5.0;    // Euler integrator time step
+	Te  = 10;     // Excitatory population time constant (ms)
+	Ti  = 80;     // Inhibitory population time constant (ms)
+	See = 2;      // Excitatory population spread (standard deviations)
+	Sii = 1;      // Inhibitory population spread (standard deviations)
+	
+	Wee = 12;     // E-E coupling weight
+	Wie = 20;     // Excitation of Inhibitory coupling weight
+	Wei = 10;     // Inhibition of Excitatory coupling weight
+	Wii = 8;      // I-I coupling weight
+	
+	Sae = 1;      // Excitatory nonlinearity scale parameter
+	Sbe = 3;      // Excitatory nonlinearity location parameter
+	Sai = 1;      // Inhibitory nonlinearity scale parameter
+	Sbi = 4.9;    // Inhibitory nonlinearity location parameter
+	
+	// bias parameters: not used, absorbed into the nonlinarity location
+	// parameter
+	//He  = -2.;     // Bias in E cell synaptic input
+	//Hi  = -3.5;    // Bias in I cell synaptic input
+	
+	Ne  = 1.0;     // Noise level (uniform on -0.5..0.5) in E cells
+	Ni  = 1.0;     // Noise level (uniform on -0.5..0.5) in I cells
+	
+	// Oscillatory period and amplitude not used at this time
+	//T   = 50.0;    // Oscillatory period (ms)
+	//Amp = 0.5;
+	
+	Ge  = 0.5;     // Input drive to E cells
+	Gi  = 0.0;     // Input drive to I cells
+	Str = 0.8;     // Sinusoidal input stimulus is thresholded
+	
+	stimulation_radius_squared = 13; // in pixels^2
+	
+	display_every = 1; // don't show every time step
+
+	// step function
+	function heav(z) {
+	    return z<0.0? 0.0 : z==0.0? 0.5 : 1.0;}
+	
+	// firing nonlinearity
+	function F(x) {
+		return 1/(1+Math.exp(-x)); }
+
+	function Je(x,y,t) {
+	    //var s = Math.sin(2*Math.PI * t / T);
+	    //return heav(s-Str)*Amp;
+	    x -= W*0.5;
+	    y -= H*0.5;
+	    r = x*x+y*y;
+	    return r<stimulation_radius_squared? 1:0;
+	}
+	
+	function Ji(x,y,t) {
+		return 0;
+	}
+	
+    var Ue = new Float32Array(new ArrayBuffer(W*H*4));
+    var Ui = new Float32Array(new ArrayBuffer(W*H*4));
+    var Uec= new Float32Array(new ArrayBuffer(W*H*4));
+    var Uic= new Float32Array(new ArrayBuffer(W*H*4));
+    var temp = new Float32Array(new ArrayBuffer(W*H*4));
+
+	/*
+	Define a mapping from simulation space into color space.
+	The nonlinarity clamps values between 0 and 1, these
+	can be mapped linearly to 0..255 color values
+	
+	Define an update function to convert simulation to 
+	image data and show it.
+	
+	Initialize the system with a test pattern and show that
+	test pattern.
+	*/
+    
+	function sim2image() {
+		/* Converts simulation data to image data for display. */
+	    for (var y=0;y<H;++y) {
+	        for (var x=0;x<W;++x) {
+				i = x+W*y;
+				//data[i] = 0xff000000
+	            //        | (((Ue[i]*0xff)&0xff)<<16)
+	            //        |  ((Ui[i]*0xff)&0xff)*0x0101;
+	            data[i] = parula_colors[(Ui[i]+Ue[i])*128&0xff];
+	        }
+	    }
+	}
+	
+	function showSim() {
+		sim2image();
+    	ctx.putImageData(imageData, 0, 0);      
+    }
+
+    // Initialize checker test pattern
+    for (var y=0;y<H;++y)
+	for (var x=0;x<W;++x) {
+		i = x+W*y;
+        Ue[i] = ((x^y)&1);
+        Ui[i] = 1-Ue[i];
+	}
+	
+	showSim();
+	
+	/*
+	Perform actual simulation initializaton. 
+	
+	Define the firing rate nonlinearity. 
+	
+	Define shared random state and seed it. We use
+	a local, very week random number generator for 
+	speed. We occassionally re-seed this RNG from a 
+	stronger RNG source.
+	
+	Initialize simulation with a random state. 
+	*/
+	
+	var rand = Math.floor(Math.random()*0x1000000);
+	function seedrand() { 
+		rand = Math.floor(Math.random()*0x1000000);}
+	function weakrand() { 
+		return ((rand^=rand>>2^rand<<1)&0xffff) * 1.52587890625e-05;}
+	
+    for (var y=0;y<H;++y)
+	for (var x=0;x<W;++x) {
+		var i = x+W*y;
+        Ue[i] = weakrand();
+        Ui[i] = weakrand();
+	}
+	
+	/* Test the Gaussian blur code */
+	blurGaussianFloat32SeparableNoWrap(Ue,Ue,temp,W,H,See);
+	blurGaussianFloat32SeparableNoWrap(Ui,Ui,temp,W,H,Sii);
+	showSim();
+	
+	/* 
+	Run the simulation.
+	
+	We use forward Euler integration. This can introduce fairly large
+	error. However, it is usually possible to choose a step size
+	for which integration is at least stable. The remaining error can 
+	be compensated for by adjusting the parameters to generate the right
+	qualitative behavior.
+	
+	The integration step, in pseudocode, is
+	For each frame
+		Compute convolutions
+		Compute update
+		Update display
+	*/
+	
+	
+	function convolve() {	
+		blurGaussianFloat32SeparableNoWrap(Ue,Uec,temp,W,H,See);
+		blurGaussianFloat32SeparableNoWrap(Ui,Uic,temp,W,H,Sii);
+	}
+	
+	function updateState(t) {	
+		// Te dUe/dt = -Ue + F(Wee⊗Ue-Wei⊗Ui+Je(t)+He)
+		// Ti dUi/dt = -Ui + F(Wie⊗Ue-Wii⊗Ui+Ji(t)+Hi)
+		
+		// just an experiment here. not sure if it will work.
+		var temp = (cursor1.offsetLeft-slider1.offsetLeft)*1.0/slider1.offsetWidth;
+		if (Ge!=temp) Ge=temp;
+		
+		console.log(Ge)
+		for (var y=0;y<H;++y) 
+        for (var x=0;x<W;++x) {
+			var i  = x+W*y;
+			var Ve = F((Wee*Uec[i]-Wei*Uic[i]+(weakrand()-0.5)*Ne+Ge*Je(x,y,t)-Sbe)*Sae);
+			var Vi = F((Wie*Uec[i]-Wii*Uic[i]+(weakrand()-0.5)*Ni+Gi*Ji(x,y,t)-Sbi)*Sai);
+			Ue[i] += (Ve-Ue[i])/Te*dt;
+			Ui[i] += (Vi-Ui[i])/Ti*dt;
+        }
+	}
+	
+	var timestep = 0;
+    function iterate() {
+		for (var i=0; i<display_every; i++) {
+			seedrand();
+			convolve();
+			updateState(timestep*dt);
+			showSim();
+			timestep += 1;
+		}
+        if (running) setTimeout(iterate,0);
+    }
+    
+	canvas.onmousedown = function(e) {
+		running = 1-running;
+		if (running) setTimeout(iterate, 0);
+	};
+	
+    console.log('starting');
+    setTimeout(iterate, 0);
+	
+}
+
+</script>
+
+</body>
+</html>
+
+
+
