@@ -1,0 +1,8 @@
+<canvas width=256 height=256 id='q'/>
+<script>v=document.body.lastChild
+z=v.getContext('2d')
+d=z.getImageData(b=[],m=0,N=256,N)
+R=()=>{for(i=K=N*N-1;y=i-->>6;)x=i%N*4,Y=x*y/512+512-x-y+m.pageY<<8,y+=(x*x-y*y)/1024-x+m.pageX|0,d.data[i*4+3]=N-(b[i]=Y-Y*Y/K>K/8?b[y+Y]-8:N)
+z.putImageData(d,0,0)
+setTimeout(R,0)}
+R(v.onmousemove=e=>{m=e})</script>

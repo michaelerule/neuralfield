@@ -1,0 +1,15 @@
+<head>
+<script type="text/javascript" src="j.js" >
+</script>
+</head>
+<body onload='R(d=z.getImageData(b=[],0,N=(n=512)/2,N))'>
+<canvas id='q' width=256 height=256 id='q' style='border:1px solid #000;' onclick='onmousemove=e=>{$=e}'>
+</canvas>
+<script>
+v=$('q')
+z=v.getContext('2d')
+R=()=>{for(i=K=N*N-1;y=i-->>6;)x=i%N*4,Y=x*y/n+n-x-y+$.pageY<<8,y+=(x*x-y*y>>10)-x+$.pageX,d.data[i*4+3]=N-(b[i]=Y-Y*Y/K>K/8?b[y+Y]-8:N)
+z.putImageData(d,0,0)
+setTimeout(R,9)}
+</script>
+</body>
