@@ -10,9 +10,9 @@ body {
     margin: 0;
     padding: 0;
     font-family: Helvetica, Arial, Sans-Serif;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
+    background:#fff;
+    color:#222;
+    font-color:#222;
 }
 
 A {
@@ -40,9 +40,9 @@ A {
     width:511px;
     height:511px;
     cursor: pointer;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
+    background:#fff;
+    color:#222;
+    font-color:#222;
     border:solid 1px #777;
     display: table;
     text-align: center;
@@ -105,9 +105,9 @@ input[type=number] {
     width:50px;
     font-size: 85%;
     -webkit-appearance: none;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
+    background:#fff;
+    color:#222;
+    font-color:#222;
     border:solid 1px #777;
     padding: 1px 1px 1px 1px;
 }
@@ -141,15 +141,15 @@ input[type=number] {-moz-appearance: textfield;}
     margin:-1px -1px 0px 0px;
     border:solid 1px #777;
     width:auto;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
+    background:#fff;
+    color:#222;
+    font-color:#222;
     padding: 3px 7px 3px 7px;
 }
 .button:hover {
-    background: #fff;
+    background: #222;
     text-decoration: none;
-    color: #333;
+    color: #fff;
     border:solid 1px #777;
 }
 
@@ -160,17 +160,17 @@ input[type=number] {-moz-appearance: textfield;}
     border:solid 1px #777;
     width:  18px;
     height: 18px;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
+    background:#fff;
+    color:#222;
+    font-color:#222;
     padding: 0px;
     text-align: center;
     line-height: 18px;
 }
 .squarebutton:hover {
-    background: #fff;
+    background: #222;
     text-decoration: none;
-    color: #333;
+    color: #fff;
     border:solid 1px #777;
 }
 .squarebutton div.info {
@@ -182,8 +182,8 @@ input[type=number] {-moz-appearance: textfield;}
     left:0px;  
     top:-29px;  
     width:200px;
-    color:#fff;
-    font-color:#fff;
+    color:#222;
+    font-color:#222;
     text-align: left;
     vertical-align: top;
     font-size:9pt;
@@ -191,9 +191,9 @@ input[type=number] {-moz-appearance: textfield;}
 }
 
 .overlay{
-    background:#333;
-    color:#fff;
-    font-color:#fff;
+    background:#fff;
+    color:#222;
+    font-color:#222;
     position:fixed;
     width:100%;
     height:100%;
@@ -204,9 +204,9 @@ input[type=number] {-moz-appearance: textfield;}
 
 .clickblocker{
     opacity: 0.0;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
+    background:#fff;
+    color:#222;
+    font-color:#222;
     position:fixed;
     width:100%;
     height:100%;
@@ -269,7 +269,7 @@ input[type=number] {-moz-appearance: textfield;}
 </script>
 
 </head>
-<body onload="javascript:waitForMathJax()">
+<body onload="javascript:main()">
 
 <div class="overlay" style="margin:auto auto; height:100%; width:100%; font-size:80%;" id="hidingframe">
 <div class="outer">
@@ -289,109 +289,9 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
 <div class="middle">
 <div id='canvasdiv'>
     <div class="controlbox" style="font-size:85%;position:relative;">
-        <div style="clear:both;display:block">
-            <div class="controls">
-                Inhibitory
-                <div class="control">$a_{ii}$  
-                    <input type="number" step="any" max="100" min="0"    name="Aii" value="3.0"/>
-                </div>
-                <div class="control">$a_{ie}$  
-                    <input type="number" step="any" max="100" min="0"    name="Aie" value="12.0"/>
-                </div>
-                <div class="control">$\tau_i$  
-                    <input type="number" step="any" max="100" min="0"    name="Ti"  value="20.0"/>
-                </div>
-                <div class="control">$\theta_i$
-                    <input type="number" step="any" max="100" min="-100" name="Hi"  value="3.5"/>
-                </div>
-                <div class="control">$g_i$     
-                    <input type="number" step="any" max="100" min="-100" name="Gi"  value="0.0"/>
-                </div>
-                <div class="control">$\sigma_{ix}$
-                    <input type="number" step="any" max="100" min="0"    name="Six"  value="1.5"/>
-                </div>
-                <div class="control">$\sigma_{iy}$
-                    <input type="number" step="any" max="100" min="0"    name="Siy"  value="1.5"/>
-                </div>
-                <div class="control">$N_i$
-                    <input type="number" step="any" max="100" min="0"    name="Ni"  value="0.1"/>
-                </div>
-                <div class="control">$\alpha_i$
-                    <input type="number" step="any" max="1000" min="0"    name="ai"  value="5.0"/>
-                </div>
-                <div class="control">$\beta_i$
-                    <input type="number" step="any" max="100"  min="-100" name="bi"  value="0.0"/>
-                </div>
-            </div>
-            <div class="controls">
-                Excitatory
-                <div class="control">$a_{ee}$  
-                    <input type="number" step="any" max="100" min="0"    name="Aee" value="10.0"/>
-                </div>
-                <div class="control">$a_{ei}$  
-                    <input type="number" step="any" max="100" min="0"    name="Aei" value="8.5"/>
-                </div>
-                <div class="control">$\tau_e$  
-                    <input type="number" step="any" max="100" min="0"    name="Te"  value="10.0"/>
-                </div>
-                <div class="control">$\theta_e$
-                    <input type="number" step="any" max="100" min="-100" name="He"  value="2.0"/>
-                </div>
-                <div class="control">$g_e$     
-                    <input type="number" step="any" max="100" min="-100" name="Ge"  value="0.8"/>
-                </div>
-                <div class="control">$\sigma_{ex}$
-                    <input type="number" step="any" max="100" min="0"    name="Sex"  value="0.6"/>
-                </div>
-                <div class="control">$\sigma_{ey}$
-                    <input type="number" step="any" max="100" min="0"    name="Sey"  value="0.6"/>
-                </div>
-                <div class="control">$N_e$
-                    <input type="number" step="any" max="100" min="0"    name="Ne"  value="0.1"/>
-                </div>
-                <div class="control">$\alpha_e$
-                    <input type="number" step="any" max="1000" min="0"    name="ae"  value="5.0"/>
-                </div>
-                <div class="control">$\beta_e$    
-                    <input type="number" step="any" max="100"  min="-100" name="be"  value="0.0"/>
-                </div>
-            </div>
-        </div>
-        <br>
-        <div style="clear:both;display:block">
-            <div class="controls">
-                Time stepping
-                <div class="control">$\Delta t$
-                    <input type="number" step="any" max="100"  min="0"    name="dt"  value="2.0"/>
-                </div>
-                <div class="control">Skip
-                    <input type="number" step="1" max="50"  min="1"    name="display_every"  value="3"/>
-                </div>
-            </div>
-            <div class="controls">
-                Stimulus
-                <div class="control">$A$       
-                    <input type="number" step="any" max="100"  min="-100" name="Amp" value="0.5"/>
-                </div>
-                <!--<div class="control">$T$       
-                    <input type="number" step="any" max="1000" min="0"    name="T"   value="50.0"/>
-                </div>-->
-            </div>
-        </div>   
-        <div style="clear:both;display:block"> 
-            <div class="controls">
-                Output smoothing
-                <div class="control">$\sigma_b$
-                    <input type="number" step="any" max="100"  min="0"    name="Sb"  value="2.0"/>
-                </div>
-         
-            </div>   
-        </div>   
-        
         <div style="position:absolute;bottom:0;left:0;">
         
         <div class="controltext">
-            Presets
         </div>
         <div class="button_container" id="presets">
         </div>
@@ -417,12 +317,15 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
     <div style='position:absolute;bottom:-276px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Peripheral region</div>
     
     <!-- title for plot on top left -->
-    <div style='position:absolute;bottom:-20px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E-cell firing rate</div>
+    <div style='position:absolute;bottom:-20px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;color:#fff;'>E-cell firing rate</div>
+
     <!-- title for plot on top right -->
-    <div style='position:absolute;bottom:-20px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>I-cell firing rate</div>
+    <div style='position:absolute;bottom:-20px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;color:#fff;'>I-cell firing rate</div>
     
     <!-- title for plot on bottom right -->
     <div style='position:absolute;bottom:-276px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Stimulated region</div>
+    <!-- x-axis label for plot on bottom right -->
+    <div style='position:absolute;bottom:-512px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:70%;'>E-cell firing rate ∈[0,1]</div>
     
     
     
@@ -437,54 +340,7 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
     
     </div>
 
-    <!-- just here for padding -->
-    <div class="infotext">
-        <h3 style="margin-top:0px;">Wave State Demonstration</h3>
-        <span style="font-size:80%;">
-        This demonstration is designed to illustrate a hypotehtical wave 
-        mode seen during optogentic stimulation in motor cortex. In this 
-        mode, the stimulated region forces damped traveling waves in the 
-        periphery at a ratio of 2:1. Additionally, there is instability 
-        inside the stimulated region, leading to traveling waves across 
-        the stimulation area that originate at the boundary. The Stimulated 
-        region has a radius of 30 pixels, the stimulus
-        mask has been smoothed with a Gaussian kernel with a standard
-        deviation of 4 piexls, given the stimulated region a soft boundary.
-        Heterogeneity is added to the time constants (in a somewhat hacked
-        way that I can explain or try to clean up), and is also smoothed 
-        with a Gaussian kernel of 4 pixels. These new additions are not
-        reflected in the equations.  
-        </span>
-        <br/>    
-        <!--<span style="font-size:80%;">©2015 Michael Rule all rights reserved</span>-->
-    
-        <div class="controltext" style="width:240px;">
-        </div>
-        <div class="controltext" style="width:240px;">
-            Simulation
-        </div>
-        <div class="button_container">
-            <input class="button" type="button" value="Start"/>
-            <input class="button" type="button" value="Step"/>
-            <input class="button" type="button" value="Save"/>
-            <input class="button" type="button" value="Load"/>
-            <input class="button" type="button" value="Randomize"/>
-            <input class="button" type="button" value="Seed"/>
-            <input class="button" type="button" value="Seed Spiral"/>
-            <input class="button" type="button" value="Perturb Homogeneous"/>
-            <input class="button" type="button" value="E Cell Impulse"/>
-            <input class="button" type="button" value="I Cell Impulse"/>
-        </div>
-    </div>
-    
-    <div id="equation">
-    \[\textrm{E-cells:  } \tau_e \dot{U_e} = -U_e + f( a_{ee}  \cdot K_e \star U_e - a_{ie}  \cdot K_i \star U_i - \theta_e + g_e S(t) - \beta_e V_e)\]
-    \[\textrm{I-cells:  } \tau_i \dot{U_i} = -U_i + f( a_{ei}  \cdot K_e \star U_e - a_{ii}  \cdot K_i \star U_i - \theta_i + g_i S(t) - \beta_i V_i )\]
-    \[\textrm{E-cell adaptation:  } \alpha_e \dot{V_e} = U_e - V_e \]
-    \[\textrm{I-cell adaptation:  } \alpha_i \dot{V_i} = U_i - V_i \]
-    \[\textrm{Interaction kernel (normalized to 1):  } K_{e,i}(x,y) \propto \exp(\frac{1}{2} \frac{x^2}{\sigma_{x\,e,i}^2}+\frac{1}{2} \frac{y^2}{\sigma_{y\,e,i}^2})\]
-    
-    </div>
+
 </div>
 </div>
 </div>
@@ -642,23 +498,21 @@ function main() {
     var bi  = 0.0;      // Strength of Inhibitory adaptation
     var be  = 1.0;      // Strength of Excitatotu adaptation
     var Sb  = 0.1;      // output blur standard deviation
-    var mask_radius = 20;
-    var display_every = 13; // don't show every time step
-    var running = 0;
-    var structure_scale=3;
+    var mask_radius     = 20;
+    var display_every   = 13; // don't show every time step
+    var running         = 0;
+    var structure_scale = 3;
+    var pad_plot_by     = 100;
     
-    Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Six=2;Siy=2;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Sex=4;Sey=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;
-    
+    Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Six=2;Siy=2;Ni=0;ai=50;bi=1;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Sex=4;Sey=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;
+    //Aii=4;Aie=5;Ti=50;Hi=0.06;Gi=0;Six=1;Siy=1;Ni=0;ai=50;bi=1;Aee=6.7;Aei=6;Te=5;He=0.475;Ge=0.8;Sex=1;Sey=1.4;Ne=0;ae=50;be=1;dt=5;display_every=1;Amp=0;T=125;Sb=5;
     // step function
     function heav(z) {
         return z<0.0? 0.0 : z==0.0? 0.5 : 1.0;}
     
     // firing nonlinearity
     function F(x) {
-        //x = heav(x+15)-15;
-        if (x<-1) x=-1;
-        return 1/(1+Math.exp(-x));
-    }
+        return 1/(1+Math.exp(-x)); }
 
     function Stim(t) {
         var s = Math.sin(2*Math.PI * t / T);
@@ -702,7 +556,7 @@ function main() {
     test pattern.
     */
     
-    var plot_padding = 72>>downscale;
+    var plot_padding = pad_plot_by>>downscale;
     var SW = W-plot_padding|0;
     
     function locate_zeros(buffer1,buffer2) {
@@ -789,10 +643,10 @@ function main() {
                 var b = ((1.-Ui[i])*SW|0)+plot_padding/2
                 if (mask[i]>0.5) { // in stim region
                     var j = a+b*W2+W2*H+W;
-                    data[j] = 0x01010101*(255-((255-((data[j])&0xff))*0.5|0));
+                    data[j] = 0xff000000|0x010101*(((data[j])&0xff)*0.50|0);
                 } else { // in periphery
                     var j = a+b*W2+W2*H;
-                    data[j] = 0x01010101*(255-((255-((data[j])&0xff))*0.75|0));
+                    data[j] = 0xff000000|0x010101*(((data[j])&0xff)*0.75|0);
                 }
             }
         }
@@ -805,7 +659,7 @@ function main() {
                     (temp [i]>0)!=(temp [i-SW]>0)) {
                     var j = x+(SW-y)*W2
                           + plot_padding/2+W2*plot_padding/2+W2*H;
-                    data[j]=0xff00ff00;
+                    data[j]=0xff008800;
                 }
                 if ((temp2[i]>0)!=(temp2[i-1]>0)||
                     (temp2[i]>0)!=(temp2[i-SW]>0)) {
@@ -867,8 +721,8 @@ function main() {
                 i = x+y*W;
                 data[  x + Y   ] = colormap_colors[Ue[i]*255|0]
                 data[x+W + Y   ] = colormap_colors[Ui[i]*255|0]
-                data[  x + Y+dY] = 0x00000000;
-                data[x+W + Y+dY] = 0x00000000;
+                data[  x + Y+dY] = 0xffffffff;
+                data[x+W + Y+dY] = 0xffffffff;
                 //data[x+W + Y+dY] = colormap_colors[mask[i]*255|0]
             }
         }
@@ -1087,7 +941,7 @@ function main() {
     }
 
     presets=[
-    ['Spiral wave edge-origin with 2:1 forcing','perturbhomogeneous','Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Six=2;Siy=2;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Sex=4;Sey=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;'],
+    //['Spiral wave edge-origin with 2:1 forcing','perturbhomogeneous','Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Six=2;Siy=2;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Sex=4;Sey=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;'],
     ];
     
     /*
@@ -1157,6 +1011,7 @@ function main() {
     }
     CONVOLUTION(mask,mask,temp,W,H,structure_scale,structure_scale);
     
+    
     function updateState(t) {    
         var aet = dt/ae;
         var ait = dt/ai;
@@ -1177,6 +1032,8 @@ function main() {
                 Ai[i] += (Ui[i]-Ai[i])*ait;
             }
         }
+
+        
     }
     
     //http://www.paulirish.com/2011/requestanimationframe-for-smart-animating/
@@ -1219,7 +1076,7 @@ function main() {
         // load the GUI state into the local variables
         // using eval is "dangerous", in that user-provided inputs
         // can now cause arbitrary code execution. 
-        // this might be hanging the UI, I'm not 100% sure
+        // this might be hanging the UI, I'm not 10% sure
         try {
 		for (var i=0; i<controls.length; i++) {
 		    var control = controls[i];
@@ -1231,7 +1088,7 @@ function main() {
         
         // this should work unless the user has entered 
         // unsafe parameters. Would be best to verify params but
-        // ... that would take a lot more code. 
+        // ... that would take a lot more coding. 
         try {
             seedrand();
             convolve();
