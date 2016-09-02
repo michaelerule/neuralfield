@@ -36,7 +36,7 @@ The (2,3,4)-vector notation of GLSL, while convenient, won't exist
 in OpenCL implementations and should not be used in the model
 description language.
 
-Consider the following Wilson-Cowan implemented witj 8-bit fixed
+Consider the following Wilson-Cowan implemented with 8-bit fixed
 point in WebGL
 
 <script id="wc_kernel-parameters" type="x-fragment-parameters">

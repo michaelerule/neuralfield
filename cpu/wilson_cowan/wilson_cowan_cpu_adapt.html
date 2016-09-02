@@ -307,8 +307,11 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
                 <div class="control">$g_i$     
                     <input type="number" step="0.02" max="100" min="-100" name="Gi"  value="0.0"/>
                 </div>
-                <div class="control">$\sigma_{i}$
-                    <input type="number" step="0.02" max="100" min="0"    name="Si"  value="1.5"/>
+                <div class="control">$\sigma_{ix}$
+                    <input type="number" step="0.02" max="100" min="0"    name="Six"  value="1.5"/>
+                </div>
+                <div class="control">$\sigma_{iy}$
+                    <input type="number" step="0.02" max="100" min="0"    name="Siy"  value="1.5"/>
                 </div>
                 <div class="control">$N_i$
                     <input type="number" step="0.02" max="100" min="0"    name="Ni"  value="0.1"/>
@@ -337,8 +340,11 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
                 <div class="control">$g_e$     
                     <input type="number" step="0.02" max="100" min="-100" name="Ge"  value="0.8"/>
                 </div>
-                <div class="control">$\sigma_{e}$
-                    <input type="number" step="0.02" max="100" min="0"    name="Se"  value="0.6"/>
+                <div class="control">$\sigma_{ex}$
+                    <input type="number" step="0.02" max="100" min="0"    name="Sex"  value="0.6"/>
+                </div>
+                <div class="control">$\sigma_{ey}$
+                    <input type="number" step="0.02" max="100" min="0"    name="Sey"  value="0.6"/>
                 </div>
                 <div class="control">$N_e$
                     <input type="number" step="0.02" max="100" min="0"    name="Ne"  value="0.1"/>
@@ -372,7 +378,15 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
                 </div>-->
             </div>
         </div>   
-
+        <div style="clear:both;display:block"> 
+            <div class="controls">
+                Output smoothing
+                <div class="control">$\sigma_b$
+                    <input type="number" step="0.02" max="100"  min="0"    name="Sb"  value="2.0"/>
+                </div>
+         
+            </div>   
+        </div>   
         
         <div style="position:absolute;bottom:0;left:0;">
         
@@ -400,15 +414,15 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
         I-cell firing rate ∈[0,1]
     </div>
     <!-- title for plot on bottom left -->
-    <div style='position:absolute;bottom:-276px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Peripheral region</div>
+    <div style='position:absolute;bottom:-276px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Steady-state adaptation</div>
     
     <!-- title for plot on top left -->
-    <div style='position:absolute;bottom:-20px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E-cell firing rate</div>
+    <div style='position:absolute;bottom:-20px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Firing Rate Red = E, Green = Ie</div>
     <!-- title for plot on top right -->
-    <div style='position:absolute;bottom:-20px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>I-cell firing rate</div>
+    <div style='position:absolute;bottom:-20px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Adaptation Red = E, Green = I</div>
     
     <!-- title for plot on bottom right -->
-    <div style='position:absolute;bottom:-276px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Stimulated region</div>
+    <div style='position:absolute;bottom:-276px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Without adaptation</div>
     
     
     
@@ -606,8 +620,10 @@ function main() {
     var dt  = 1.0;      // Euler integrator time step
     var Te  = 10;       // Excitatory population time constant (ms)
     var Ti  = 40;       // Inhibitory population time constant (ms)
-    var Se  = 0.6;     // Excitatory population spread (standard deviations)
-    var Si  = 0.1; // Inhibitory population spread (standard deviations)
+    var Sex  = 0.6;     // Excitatory population spread (standard deviations)
+    var Six  = 0.1; // Inhibitory population spread (standard deviations)
+    var Sey  = 0.6;     // Excitatory population spread (standard deviations)
+    var Siy  = 0.1;     // Inhibitory population spread (standard deviations)
     var Aee = 11;      // E-E coupling Aeight
     var Aie = 12;       // Excitation of Inhibitory coupling Aeight
     var Aei = 8.5;      // Inhibition of Excitatory coupling Aeight
@@ -625,12 +641,13 @@ function main() {
     var ae  = 24.0;      // Timescale of excitatory adaptation
     var bi  = 0.0;      // Strength of Inhibitory adaptation
     var be  = 1.0;      // Strength of Excitatotu adaptation
+    var Sb  = 0.1;      // output blur standard deviation
     var mask_radius = 20;
     var display_every = 13; // don't show every time step
     var running = 0;
     var structure_scale=3;
     
-    Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Si=2;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Se=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;
+    Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Six=2;Siy=2;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Sex=4;Sey=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;
     
     // step function
     function heav(z) {
@@ -639,12 +656,18 @@ function main() {
     // firing nonlinearity
     function F(x) {
         return 1/(1+Math.exp(-x)); }
+    
+    // adaptation nonlinearity
+    function G(x) {
+        return Math.exp(x)-1; }
 
     function Stim(t) {
         var s = Math.sin(2*Math.PI * t / T);
         return heav(s-Str)*Amp;
     }
     
+    // Make a lookup table for firing rate nonlinearity
+    // since exponentiation is too slow
     var nonlinearity_lookup = new Float32Array(new ArrayBuffer(4096*4));
     for (var i=0; i<4096; i++) {
         var x = (i-2048)/256.0;
@@ -656,6 +679,25 @@ function main() {
         if (i>=4096) return 1.0;
         return nonlinearity_lookup[i]
     }
+
+
+    // Make a lookup table for adaptation nonlinearity
+    // since exponentiation is too slow
+    // 2048 is zero, the middle of the lookup
+    // variables are scales so that [0,1] = [0,256]
+    // So lookup table is defined over a large range, +- 8
+    var adaptation_nonlinearity_lookup = new Float32Array(new ArrayBuffer(4096*4));
+    for (var i=0; i<4096; i++) {
+        var x = (i-2048)/256.0;
+        adaptation_nonlinearity_lookup[i]=G(x);
+    }
+    function lookup_G(x) {
+        var i = (x*256|0)+2048;
+        if (i<0) return -1.0;
+        if (i>=4096) return 2980.0;
+        return adaptation_nonlinearity_lookup[i]
+    }
+
     
     var Ue = new Float32Array(new ArrayBuffer(N*4));
     var Ui = new Float32Array(new ArrayBuffer(N*4));
@@ -684,6 +726,10 @@ function main() {
     
     var plot_padding = 72>>downscale;
     var SW = W-plot_padding|0;
+    
+    
+    var _mean_Ve_ = 0.5;
+    var _mean_Vi_ = 0.5;
     
     function locate_zeros(buffer1,buffer2) {
         /* Assuming homogenous case locate zeros, in this case by brute 
@@ -720,25 +766,24 @@ function main() {
     }
     
     
-    
-    function locate_zeros_stimulated(buffer1,buffer2) {
+    function locate_zeros_noadaptation(buffer1,buffer2) {
         /* Assuming homogenous case locate zeros, in this case by brute 
         force grid search */
         var minx=-1;
         var miny=-1;
         var best=1e30;    
-        var se = -He+Amp*Ge;
-        var si = -Hi+Amp*Gi;
+        var se = -He;
+        var si = -Hi;
         var aet = dt/ae;
         var ait = dt/ai;
         var tet = dt/Te;
         var tit = dt/Ti;
-        var xe = Aee-be;
-        var xi = bi+Aii;
+        var xe = Aee-be*_mean_Ve_;
+        var xi = bi*_mean_Vi_+Aii;
         for (var y=0; y<SW; y++) {
             var ui = y/SW
             for (var x=0; x<SW; x++) {
-                var ue = x/SW;
+                var ue = x/SW
                 var due = lookup_F(xe*ue-Aei*ui+se)-ue;
                 var dui = lookup_F(Aie*ue-xi*ui+si)-ui;
                 var i = x+SW*y;
@@ -807,7 +852,7 @@ function main() {
         }
         
         //do that again for the stimulated region
-        var p = locate_zeros_stimulated(temp,temp2);
+        var p = locate_zeros_noadaptation(temp,temp2);
         // trace nullclines
         for (var y=1; y<SW; y++) {
             for (var x=1; x<SW; x++) {
@@ -846,8 +891,17 @@ function main() {
             var Y = y*W*2;
             for (var x=0;x<W;x++) {
                 i = x+y*W;
-                data[  x + Y   ] = colormap_colors[Ue[i]*255|0]
-                data[x+W + Y   ] = colormap_colors[Ui[i]*255|0]
+                
+                var UE = Ue[i]*255|0;
+                var UI = Ui[i]*255|0;
+                var VE = Ae[i]*255|0;
+                var VI = Ai[i]*255|0;
+                var UB = Math.abs(UE-UI)|0;
+                var VB = Math.abs(VE-VI)|0;
+                data[  x + Y   ] = (UB*0x010000) + UI*(0x0100) + (UE*0x01) + 0xff000000;
+                data[x+W + Y   ] = (VB*0x010000) + VI*(0x0100) + (VE*0x01) + 0xff000000;
+                
+                
                 data[  x + Y+dY] = 0x00000000;
                 data[x+W + Y+dY] = 0x00000000;
                 //data[x+W + Y+dY] = colormap_colors[mask[i]*255|0]
@@ -984,8 +1038,8 @@ function main() {
     console.log('Simulation buffers randomized');
     
     /* Test the Gaussian blur code */
-    CONVOLUTION(Ue,Ue,temp,W,H,Se,Se);
-    CONVOLUTION(Ui,Ui,temp,W,H,Si,Si);
+    CONVOLUTION(Ue,Ue,temp,W,H,Sex,Sey);
+    CONVOLUTION(Ui,Ui,temp,W,H,Six,Siy);
     showSim();
     console.log('Convolution test passed');
     
@@ -1068,8 +1122,10 @@ function main() {
     }
 
     presets=[
-    ['Spiral wave edge-origin with 2:1 forcing','perturbhomogeneous','Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Si=2;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Se=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;'],
-    ];
+    ['Spiral wave edge-origin with 2:1 forcing','perturbhomogeneous','Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Six=2;Siy=2;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Sex=4;Sey=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;'],
+    ['Exciteable1','perturbhomogeneous','Aii=0.26;Aie=3.08;Ti=6;Hi=1.28;Gi=0;Six=3;Siy=3;Ni=0.72;ai=50;bi=0.18;Aee=8.42;Aei=5.14;Te=3;He=1.24;Ge=0;Sex=3;Sey=3;Ne=0.74;ae=50;be=1;dt=1;display_every=1;Amp=0;Sb=0.1;'],
+['Refractory waves','perturbhomogeneous',
+'Aii=0;Aie=2.74;Ti=6;Hi=1.34;Gi=0;Six=0.06;Siy=3;Ni=0;ai=9;bi=0;Aee=9.88;Aei=5.14;Te=5;He=1.24;Ge=0;Sex=0.8;Sey=3;Ne=0.52;ae=450;be=2;dt=5;display_every=1;Amp=0;Sb=0.1;'],    ];
     
     /*
     Create the preset buttons. Flicker buttons have their name shown. 
@@ -1121,8 +1177,8 @@ function main() {
     
     
     function convolve() {    
-        CONVOLUTION(Ue,Uec,temp,W,H,Se,Se);
-        CONVOLUTION(Ui,Uic,temp,W,H,Si,Si);
+        CONVOLUTION(Ue,Uec,temp,W,H,Sex,Sey);
+        CONVOLUTION(Ui,Uic,temp,W,H,Six,Siy);
     }
     
     
@@ -1139,6 +1195,8 @@ function main() {
     CONVOLUTION(mask,mask,temp,W,H,structure_scale,structure_scale);
     
     function updateState(t) {    
+        var tallyAE = 0.;
+        var tallyAI = 0.;
         var aet = dt/ae;
         var ait = dt/ai;
         var tet = dt/Te;
@@ -1152,12 +1210,17 @@ function main() {
                 var i=x+Y;
                 var dx = x-middle;
                 var s = mask[i]*Amp;
-                Ue[i] += (lookup_F(Aee*Uec[i]-Aei*Uic[i]+se+weakrand()*Ne+s*Ge-be*Ae[i])-Ue[i])*tet;///(.5+tauE[i]);
-                Ui[i] += (lookup_F(Aie*Uec[i]-Aii*Uic[i]+si+weakrand()*Ni+s*Gi-bi*Ai[i])-Ui[i])*tit;///(.5+tauE[i]);
-                Ae[i] += (Ue[i]-Ae[i])*aet;
-                Ai[i] += (Ui[i]-Ai[i])*ait;
+                
+                Ue[i] += (lookup_F(Aee*Uec[i]-Aei*Uic[i]+se+weakrand()*Ne+s*Ge-be*Ae[i])-Ue[i])*tet/(.5+tauE[i]);
+                Ui[i] += (lookup_F(Aie*Uec[i]-Aii*Uic[i]+si+weakrand()*Ni+s*Gi-bi*Ai[i])-Ui[i])*tit/(.5+tauE[i]);
+                Ae[i] = Ue[i]>Ae[i]?Ue[i]:Ae[i] + (Ue[i]-Ae[i])*aet;
+                Ai[i] = Ai[i] + (Ui[i]-Ai[i])*ait;
+                tallyAE += Ae[i];
+                tallyAI += Ai[i];
             }
         }
+        _mean_Ve_ = tallyAE / (H*W);
+        _mean_Vi_ = tallyAI / (H*W);
     }
     
     //http://www.paulirish.com/2011/requestanimationframe-for-smart-animating/

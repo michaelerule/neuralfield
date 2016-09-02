@@ -480,13 +480,13 @@ function blurGaussianFloat32SeparableAnisotropicAbsorbingRenormalizingPowerOfTwo
 		        var sum = kernel[c]*buffer[c+xcY];
 		        for (var k=0;k<c;k++) sum+=kernel[k]*(buffer[k+xcY]+buffer[L-k+xcY]);
 		        temp[Z] = sum;
-	        }*/
-        for (;x<stop;++x,++xcY,Z+=W) {
-	        var sum = 0.0;
-	        for (var k=0;   k<N; k++) sum+=kernel[k]*buffer[k+xcY];
-	        temp[Z] = sum;
-        }
-	        
+            }*/
+            for (;x<stop;++x,++xcY,Z+=W) {
+	            var sum = 0.0;
+	            for (var k=0;   k<N; k++) sum+=kernel[k]*buffer[k+xcY];
+	            temp[Z] = sum;
+            }
+	            
             for (;x<W;++x,++xcY,Z+=W) {
 		        var sum = 0.0;
 		        for (var k=Wc-x;--k;)   sum+=kernel[k]*buffer[k+xcY];
@@ -527,11 +527,11 @@ function blurGaussianFloat32SeparableAnisotropicAbsorbingRenormalizingPowerOfTwo
                 output[Z] = sum;
             }
             */
-        for (;y<stop;++y,++Y,Z+=W) {
-            var sum = 0.0;
-            for (var k=0;k<N;k++)   sum+=kernel[k]*temp[k+Y];
-            output[Z] = sum;
-        }
+            for (;y<stop;++y,++Y,Z+=W) {
+                var sum = 0.0;
+                for (var k=0;k<N;k++)   sum+=kernel[k]*temp[k+Y];
+                output[Z] = sum;
+            }
 	        for (;y<H;++y,++Y,Z+=W) {
                 var sum = 0.0;
                 for (var k=Wc-y;--k;) sum+=kernel[k]*temp[k+Y];

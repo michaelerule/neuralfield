@@ -1,0 +1,662 @@
+<html>
+<!--©2016 Michael Rule all rights reserved-->
+<head>
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+<meta content="utf-8" http-equiv="encoding">
+<title>Flicker</title>
+<link rel="stylesheet" href="diffusion_style.css" type="text/css">
+
+<!-- import the MathJax scripts -->
+<script type="text/x-mathjax-config">MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});</script>
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+<!-- import the helper scripts -->
+<script type="text/javascript" src="../lib/model_parser.js"></script>
+
+</head>
+<body onload="javascript:waitForMathJax()">
+<div class="overlay" id="hidingframe"><div class="outer"><div class="middle">
+<center>Please wait while the simulation loads<br/>
+This page requires JavaScript and access to the MathJax servers.<br/><br/>
+<img src="loader.gif"/>
+</center>
+</div></div></div>
+
+<div class="clickblocker" id="clickblock"> </div>
+<div class="outer" id="mainframe">
+<div class="middle">
+<div id='canvasdiv'>
+    <div class="controlbox">
+        <div id="controlgroups">
+        pargroup Inhibitory     
+            par Ti 20 $\tau_i$ 0 100 0.02
+            par Gi 6 $\gamma_i$ 0 1000 0.2
+            par Hi 0.5 $\theta_i$ -100 100 0.02
+        pargroup Excitatory     
+            par Te 10 $\tau_e$ 0 100 0.02
+            par Aei 0.3 $a_{ie}$ 0 100 0.02
+            par Se 0.5 $\sigma_e$ 0 100 0.02
+            par Ge 7 $\gamma_e$ 0 1000 0.2
+            par He 0.3 $\theta_e$ -100 100 0.02
+        pargroup Refractory     
+            par Ta 50 $\tau_{off}$ 0 100 0.02
+            par Be 1 $\beta_e$ -100 100 0.02
+            par Ga 5 $\gamma_a$ 0 1000 0.2
+            par Ha 0.5 $\theta_a$ -100 100 0.02
+        pargroup Time  stepping   
+            par dt 1 $\Delta_t$ 0 100 0.02
+        pargroup Driving     
+            par Ne 0.1 $N_e$ 0 100 0.02
+        </div>
+        
+        <div style="position:absolute;bottom:0;left:0;">
+        <div class="controltext">Presets</div>
+        <div class="button_container" id="presets"></div>        
+        </div>        
+    </div>
+    
+    <div style="position:relative;">
+        <canvas id='maincanvas'>
+        This application relies on the HTML5 Canvas element and Javascript. 
+        If you have Javascript disabled, try re-enabling it for this page.
+        </canvas>
+
+        <div class='axislabel' id='subplot3xlabel'>E-cell firing rate ∈[0,1]</div>
+        <div class='axislabel' id='subplot3ylabel'>I-cell firing rate ∈[0,1]</div>
+        <div class='axistitle' id='subplot3title'>E/I trajectories in phase space</br>Steady-state adaptation</div>
+        <div class='axistitle' id='subplot1title'>Firing Rate Red = E, Green = Ie</div>
+        <div class='axistitle' id='subplot2title'>Adaptation Red = E, Green = I</div>
+        <div class='axistitle' id='subplot4title'>E/I trajectories in phase space</br>Max adaptation</div>
+        
+        <div id='canvasoverlay'><div>Click to start</div></div>
+    </div>
+
+    <!-- just here for padding -->
+    <div class="infotext">
+        <h3 style="margin-top:0px;">Wilson-Cowan with diffusive coupling</h3>
+        <span style="font-size:80%;">
+        Info details here. TODO. 
+        </span>
+        <br/>
+        <br/>
+        <div class="controltext" style="width:240px;">
+            Simulation
+        </div>
+        <div class="button_container">
+            <input class="button" type="button" value="Start"/>
+            <input class="button" type="button" value="Step"/>
+            <input class="button" type="button" value="Save"/>
+            <input class="button" type="button" value="Load"/>
+            <input class="button" type="button" value="Randomize"/>
+            <input class="button" type="button" value="Seed"/>
+            <input class="button" type="button" value="Perturb Homogeneous"/>
+            <input class="button" type="button" value="E Cell Impulse"/>
+            <input class="button" type="button" value="I Cell Impulse"/>
+        </div>
+    </div>
+    
+    <div id="equation">
+\[\tau_e \dot U_e = - U_e + f_{\gamma_e}^{\theta_e}\left[ \sigma_e \nabla^2 U_e + U_e - a_{ei} U_i - \beta V_e \right]\]
+\[\tau_i \dot U_i = - U_i + f_{\gamma_i}^{\theta_i} \left[ U_e \right]\]
+\[\tau_a \dot V_e = - V_e + f_{\gamma_a}^{\theta_a} \left[ U_e \right]\]
+    </div>
+</div>
+</div>
+</div>
+
+
+<script type="text/javascript" src="./gaussian_convolution.js"></script> 
+
+<script type="text/javascript">
+function main(variables) {
+    var hidingframe   = document.getElementById('hidingframe');
+    var canvasoverlay = document.getElementById('canvasoverlay');
+    var clickblock    = document.getElementById('clickblock');
+    var canvas = document.getElementById('maincanvas');
+    var frame  = document.getElementById('canvasdiv');
+    // Other configuration variables
+    var mask_radius = 20;
+    var display_every = 1; // don't show every time step
+    var running = 0;
+    var structure_scale=3;
+    var downscale = 1;
+    var W  = canvas.clientWidth >>downscale;
+    var H  = canvas.clientHeight>>downscale;
+    var W2 = W*2;
+    var H2 = H*2;
+    canvas.width  = W2; 
+    canvas.height = H2; 
+    var N = W*H;
+    var plot_padding = 72>>downscale;
+    var mg = plot_padding/2 | 0;// margin
+    var SW = W-plot_padding|0;
+    var ctx = canvas.getContext('2d');
+    var imageData = ctx.getImageData(0,0,W*2,H*2);
+    var data = new Uint32Array(imageData.data.buffer);
+    ctx.putImageData(imageData, 0, 0);     
+    
+    var CONVOLUTION = blurGaussianFloat32SeparableAnisotropicAbsorbingRenormalizingPowerOfTwoSize
+    
+    // replace hard-coded variable definitions with dynamic ones
+    var create_vars = '';
+    for (var varname in variables) if (variables.hasOwnProperty(varname))
+        create_vars += 'var '+varname+' = '+variables[varname]+';\n';
+    eval(create_vars);
+  
+    // step function
+    function heav(z) { return z<0.0? 0.0 : z==0.0? 0.5 : 1.0; }
+    // firing nonlinearity
+    function F(x) { return 1/(1+Math.exp(-x)); }
+    // Make a lookup table for firing rate nonlinearity
+    // since exponentiation is too slow
+    var nonlinearity_lookup = new Float32Array(new ArrayBuffer(4096*4));
+    for (var i=0; i<4096; i++) {
+        var x = (i-2048)/256.0;
+        nonlinearity_lookup[i]=F(x);
+    }
+    function lookup_F(x) {
+        var i = (x*256|0)+2048;
+        if (i<0) return 0.0;
+        if (i>=4096) return 1.0;
+        return nonlinearity_lookup[i]
+    }
+
+    var simbuffer = function() {return new Float32Array(new ArrayBuffer(N*4))};
+
+    var Ue    = simbuffer();
+    var Ui    = simbuffer();
+    var Ve    = simbuffer();
+    var Out   = simbuffer();
+    var temp  = simbuffer();
+    var temp2 = simbuffer();
+    var mask  = simbuffer();
+    
+    // These buffers store grid-searched derivative values 
+    // These are for the phase-plane plots and need only be computed
+    // When parameters change.
+    //
+    // TODO: to finish this implementation, we need to make 
+    // simulation parameter changes event-based rather than polled.
+    /*
+    var dUe_buffer_1 = simbuffer();
+    var dUi_buffer_1 = simbuffer();
+    var dUe_buffer_2 = simbuffer();
+    var dUi_buffer_2 = simbuffer();
+    var dUe_buffer_3 = simbuffer();
+    var dUi_buffer_3 = simbuffer();
+    */
+    
+    function zero_finder(due,dui) {
+        var template = `
+        function ___(buffer1,buffer2) {
+            var minx=-1, miny=-1, best=1e30;    
+            for (var y=0; y<SW; y++) {
+                var ui = y/SW;
+                for (var x=0; x<SW; x++) {
+                    var ue = x/SW;
+                    var due = ${due};
+                    var dui = ${dui};
+                    var mag = due*due+dui*dui;
+                    if (mag<best) {best=mag; minx=x; miny=y;}
+                    var i = x+SW*y;
+                    buffer1[i]=due; buffer2[i]=dui;
+                }
+            }
+            return {x:minx,y:miny};
+        }`;
+        console.log(template);
+        eval(template);
+        return ___;
+    }
+    
+    function trace_nullclines(temp,temp2,origin) {
+            for (var y=1; y<SW; y++) {
+            for (var x=1; x<SW; x++) {
+                var i = x+SW*y;
+                if ((temp [i]>0)!=(temp [i-1]>0)||
+                    (temp [i]>0)!=(temp [i-SW]>0)) {
+                    var j = x+(SW-y)*W2 + origin;
+                    data[j]=0xff00ff00;
+                }
+                if ((temp2[i]>0)!=(temp2[i-1]>0)||
+                    (temp2[i]>0)!=(temp2[i-SW]>0)) {
+                    var j = x+(SW-y)*W2 + origin;
+                    data[j]=0xff0088ff;                    
+                }
+            }
+        }
+    };
+    
+    locate_zeros_steadystate = zero_finder(
+        '-ue+lookup_F(Ge*(ue-Aei*ui-Be*ue-He))',
+        '-ui+lookup_F(Gi*(ue-Hi))');
+    locate_zeros_maxadapt = zero_finder(
+        '-ue+lookup_F(Ge*(ue-Aei*ui-Be-He))',
+        '-ui+lookup_F(Gi*(ue-Hi))');
+    locate_zeros_noadapt = zero_finder(
+        '-ue+lookup_F(Ge*(ue-Aei*ui-He))',
+        '-ui+lookup_F(Gi*(ue-Hi))');
+    
+    function render_scatter() {
+        //render distribution of E/I positions in phase space
+        var offset = plot_padding*(W+1)+H*W2;
+        for (var y=1; y<H; y++) {
+            for (var x=1; x<W; x++) {
+                var i = x+y*W;
+                var a = (Ue[i]*SW|0)+mg
+                var b = ((1.-Ui[i])*SW|0)+mg
+                var j = a+b*W2+W2*H;
+                if (y*2<W) j+=W;
+                data[j] = 0x01010101*(255-((255-((data[j])&0xff))*0.5|0));
+            }
+        }
+        // trace nullclines
+        var origin = mg+W2*mg+W2*H;
+        var p = locate_zeros_steadystate(temp,temp2);
+        trace_nullclines(temp,temp2,origin);
+        
+        var origin = W+mg+W2*mg+W2*H;;
+        var p = locate_zeros_maxadapt(temp,temp2);
+        trace_nullclines(temp,temp2,origin);
+    }
+    
+    
+    function sim2image() {
+        var dY = H*2*W;
+        for (var y=0;y<W;y++) {
+            var Y = y*W*2;
+            for (var x=0;x<W;x++) {
+                i = x+y*W;
+                var UE = Ue[i]*255|0;
+                var UI = Ui[i]*255|0;
+                var VE = Ve[i]*255|0;
+                var UB = Math.abs(UE-UI)|0;
+                var VB = Math.abs(VE)|0;
+                data[  x + Y   ] = (UB*0x010000) + UI*(0x0100) + (UE*0x01) + 0xff000000;
+                data[x+W + Y   ] = (VB*0x010000) + (VE*0x01) + 0xff000000;
+                data[  x + Y+dY] = 0x00000000;
+                data[x+W + Y+dY] = 0x00000000;
+            }
+        }
+        render_scatter();
+    }
+    
+    function showSim() {
+        sim2image();
+        ctx.putImageData(imageData, 0, 0);      
+    }
+    
+    
+    var rand = Math.floor(Math.random()*0x1000000);
+    function seedrand() { 
+        rand = Math.floor(Math.random()*0x1000000);}
+    function weakrand() { 
+        return ((rand^=rand>>2^rand<<1)&0xffff) * 1.52587890625e-05;}
+    
+    // initialization functions
+    function randomize() {
+        for (var y=0;y<H;++y) { 
+        seedrand();
+        for (var x=0;x<W;++x) {
+            var i = x+W*y;
+            Ue[i] = weakrand();
+            Ve[i] = Ue[i];
+        }
+        for (var x=0;x<W;++x) {
+            var i = x+W*y;
+            Ui[i] = weakrand();
+        }
+        }
+        showSim();
+    }
+    function perturbhomogeneous() {
+        var p = locate_zeros(temp,temp2);
+        var ue = p.x/(1.0*SW);
+        var ui = p.y/(1.0*SW);
+        console.log(ue,ui);
+        for (var y=0;y<H;++y)
+        for (var x=0;x<W;++x) {
+            var i = x+W*y;
+            var r = 0.05*weakrand()
+            var t = 6.283185307179586*weakrand()
+            Ue[i] = ue+r*Math.cos(t);
+            Ui[i] = ui+r*Math.sin(t);
+            Ve[i] = Ue[i];
+        }
+        showSim();
+    }
+    function ecellimpulse() {
+        for (var y=0;y<H;++y)
+        for (var x=0;x<W;++x) {
+            var i = x+W*y;
+            Ue[i] += .1
+        }
+        showSim();
+    }
+    function icellimpulse() {
+        for (var y=0;y<H;++y)
+        for (var x=0;x<W;++x) {
+            var i = x+W*y;
+            Ui[i] += .1
+        }
+        showSim();
+    }
+    function nothing() {}
+    function seed() {
+        for (var y=0;y<H;++y)
+        for (var x=0;x<W;++x) {
+            var i = x+W*y;
+            var r = Math.pow((x-W/2.0)*0.9,2)+Math.pow(y-H/2.0,2);
+            if (r<100) {
+                Ue[i] = weakrand()*0.3;
+                Ui[i] = 0.0;
+            } else {
+                Ue[i] = 0.0;
+                Ui[i] = weakrand()*0.15;
+            }
+        }
+    }
+    randomize();
+    
+    /*
+    Prepare the user interface controls.
+    All input fields have been given names that match local variable
+    names. Rather than register an input-changed callback, currently we
+    just poll input fields before each simulation update. First, we
+    set the values of all input fields to match the initial state of these
+    local control variables.
+    */
+    var inputs = document.getElementsByTagName("input");
+    var controls = [];
+    for (var i=0; i<inputs.length; i++)
+        if (inputs[i].type=='number')
+            controls.push(inputs[i]);
+    function setcontrols() {
+        for (var i=0; i<controls.length; i++) {
+            var control = controls[i];
+            eval('control.value='+control.name);
+        }
+    }
+    setcontrols();
+    var buttons = [];
+    var stopstartbutton; //needs to get modified so we need a handle to it
+    for (var i=0; i<inputs.length; i++) {
+        var button = inputs[i];
+        if (button.type=='button') {
+            buttons.push(button);
+            button.onclick = (function(button){return function(click) {
+                eval(button.value.replace(/\s/g,'').toLowerCase()+'()');
+            };})(button);
+            if (button.value=='Start') {
+                stopstartbutton=button;
+                button.style.width = button.offsetWidth;
+            }
+        }
+    }
+    function start() {
+        if (!running) {
+            running = 1;
+            setTimeout(iterate, 0);
+        }
+        stopstartbutton.value="Stop";
+        canvasoverlay.style.display = "none";
+    }
+    function stop() {
+        if (running) running = 0;
+        stopstartbutton.value="Start";
+    }
+    function step() {
+        stop();
+        iterate();
+    }
+    function statestring() {
+        var state='';
+        for (var i=0; i<controls.length; i++) {
+            var control = controls[i];
+            state += control.name+'='+control.value+';';
+        }
+        return state;
+    }
+    function save() {
+        var wasrunning = running;
+        stop();
+        prompt("Copy (control+C) these parameters & record them.\nThey can be reloaded using the 'Load' button.\n", statestring());
+        if (wasrunning) start();
+    }
+    function loadstring(s) {
+        eval(s);
+        setcontrols();
+        randomize();
+        start();
+    }
+    function load() {
+        stop();
+        result = prompt("Paste saved parameters below:\n","");
+        if (result) loadstring(result);
+    }
+
+    presets=[
+        ['default','randomize','Ti=20;Gi=6;Hi=0.5;Te=10;Aei=0.3;Se=0.5;Ge=7;He=0.3;Ta=50;Be=0.06;Ga=5;Ha=0.5;dt=1;Ne=0.1;'],
+];
+    
+    /*
+    Create the preset buttons. Flicker buttons have their name shown. 
+    Fun preset buttons use a different class that displays the info string
+    on the top left of the page on hover
+    */ 
+    preset_container = document.getElementById('presets');
+    
+    for (var i=0; i<presets.length; i++) {
+        var name = presets[i][0];
+        var init = eval(presets[i][1]);
+        var pdat = presets[i][2];
+        var ps = document.createElement("div");
+        //ps.setAttribute("class","button");
+        ps.setAttribute("class","squarebutton");
+        ps.innerHTML = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'[i];
+        //ps.innerHTML = name
+        var st = document.createElement("div");
+        st.setAttribute("class","info");
+        st.innerHTML = name;
+        ps.appendChild(st);
+        ps.onclick   = (function(name,init,pdat){
+            return function() {
+                init();
+                eval(pdat);
+                setcontrols();
+                console.log(name);
+                start();
+            };})(name,init,pdat);
+        preset_container.appendChild(ps);
+    }
+    console.log('Presets loaded');
+    
+    /* 
+    Run the simulation.
+    
+    We use forward Euler integration. This can introduce fairly large
+    error. However, it is usually possible to choose a step size
+    for which integration is at least stable. The remaining error can 
+    be compensated for by adjusting the parameters to generate the right
+    qualitative behavior.
+    
+    The integration step, in pseudocode, is
+    For each frame
+        Compute convolutions
+        Compute update
+        Update display
+    */
+    
+    
+    
+    var middle=W/2;
+    for (var y=0;y<H;y++) {
+        var Y=y*W;
+        var dy=y-middle;
+        for (var x=0;x<W;x++) {
+            var i=x+Y;
+            var dx = x-middle;
+            if (dx*dx+dy*dy<mask_radius*mask_radius) mask[i]=1;
+        }
+    }
+    CONVOLUTION(mask,mask,temp,W,H,structure_scale,structure_scale);
+    
+    function updateState(t) {    
+        //console.log('updateState '+t);
+        var tallyAE = 0.;
+        var tallyAI = 0.;
+        var tet = dt/Te;
+        var tit = dt/Ti;
+        var tat = dt/Ta;
+        var se = -0.5*Ne;
+        var Ce = (1-Se*4);
+
+        var ue,ui,ve,prev,next,abov,down,Lp,dUe,dUi,dVe,v,s;
+
+        for (var y=0;y<H;y++) {
+            var Y=y*W;
+            var dy=y-middle;
+
+            var ydown = y>1?(y-1)*W:(H-1)*W;
+            var yabov = y<H-1?(y+1)*W:0;
+
+            ue   = Ue[Y+W-1];
+            next = Ue[Y+0];
+
+            for (var x=0;x<W;x++) {
+                var i=x+Y;
+                var dx = x-middle;
+
+                prev = ue;
+                ue = next;
+                next = Ue[Y+(x+1&0xff)];
+                abov = Ue[x+ydown];
+                down = Ue[x+yabov];
+                ui = Ui[i];
+                ve = Ve[i];
+                Lp = Se*(prev+next+abov+down)+Ce*ue;
+                dUe = -ue + lookup_F(Ge*(Lp-Aei*ui-Be*ve-He+se+weakrand()*Ne));
+                dUi = -ui + lookup_F(Gi*(ue-Hi));
+                dVe = -ve + lookup_F(Ga*(ue-Ha));
+                Ue[i] += dUe*tet;
+                Ui[i] += dUi*tit;
+                Ve[i] += dVe*tat;
+            }
+        }
+    }
+    
+    //http://www.paulirish.com/2011/requestanimationframe-for-smart-animating/
+    (function() {
+    var lastTime = 0;
+    var vendors = ['webkit', 'moz'];
+    for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+        window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
+        window.cancelAnimationFrame  =
+          window[vendors[x]+'CancelAnimationFrame'] || window[vendors[x]+'CancelRequestAnimationFrame'];
+    }
+    if (!window.requestAnimationFrame)
+        window.requestAnimationFrame = function(callback, element) {
+            var currTime = new Date().getTime();
+            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+            var id = window.setTimeout(function() { callback(currTime + timeToCall); }, timeToCall);
+            lastTime = currTime + timeToCall;
+            return id;
+        };
+    if (!window.cancelAnimationFrame)
+        window.cancelAnimationFrame = function(id) { clearTimeout(id); };
+    }());
+
+
+    var timestep = 0;
+    var frametime = +new Date(); // unary + is an integer cast here
+    var framedelayms = 25;
+    var nextframe = frametime+framedelayms;
+    var frameskip = 1;
+    var refresh = 0; 
+    function iterate() {
+        
+        if (refresh<1) {
+            refresh++;
+            if (running) requestAnimationFrame(iterate);
+            return;
+        }
+        refresh=0;
+
+        // load the GUI state into the local variables
+        // using eval is "dangerous", in that user-provided inputs
+        // can now cause arbitrary code execution. 
+        // this might be hanging the UI, I'm not 100% sure
+        try {
+		for (var i=0; i<controls.length; i++) {
+		    var control = controls[i];
+		    eval(control.name+'='+control.value);
+		}
+        }  catch (err) {
+            console.log(err.message);
+        }
+        
+        // this should work unless the user has entered 
+        // unsafe parameters. Would be best to verify params but
+        // ... that would take a lot more code. 
+        try {
+            seedrand();
+            updateState(timestep*dt);
+            timestep += 1;
+        }  catch (err) {
+            console.log(err.message);
+        }
+
+        if (frameskip>=display_every) {
+            showSim();
+            frameskip=0;
+        } else frameskip++;
+        
+        // moving request animation fram til /after/ computation
+        // is finished. Hoping this might make the UI a little
+        // more responsive but not sure
+        if (running) requestAnimationFrame(iterate);
+    }
+    
+    canvas.onmousedown = function(e) {
+        if (running) stop();
+        else start();
+    };
+    
+    hidingframe.style.display = "none";
+    clickblock.style.display  = "none";
+    clickblock.style.cursor   = "pointer";
+    var startfun = function(e) { 
+        canvasoverlay.style.display = "none";
+        clickblock.style.display    = "none";
+        start();
+    };
+    clickblock.onclick = startfun;
+    canvasoverlay.onclick = startfun;
+    
+    console.log('Initialization complete');
+}
+
+function waitForMathJax() {
+
+    // Controls should be expanded early so MathJax can process
+    // the LeTeX notation
+    var variables = interpret_abbreviated_controls();
+
+    console.log('Waiting for MathJax to load');
+    try {
+        MathJax.Hub.Queue(["Typeset",MathJax.Hub]); 
+        MathJax.Hub.Queue((function(){main(variables);}));
+    } catch(e) {
+        console.log('MathJax is missing, continuing without it');
+        main(variables);
+    }
+}
+
+
+</script>
+
+</body>
+</html>
+
+
+

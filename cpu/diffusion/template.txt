@@ -1,254 +1,10 @@
 <html>
-<!--©2015 Michael Rule all rights reserved-->
+<!--©2016 Michael Rule all rights reserved-->
 <head>
 <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
 <meta content="utf-8" http-equiv="encoding">
 <title>Flicker</title>
-<!-- Flicker javascript demo (c) Michael Rule 2015 --> 
-<style>
-body {
-    margin: 0;
-    padding: 0;
-    font-family: Helvetica, Arial, Sans-Serif;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
-}
-
-A {
-    text-decoration:none;
-    color:#ff0;
-    font-color:#ff0;
-} 
-
-#maincanvas {
-    margin: auto;
-    padding: 0;
-    width:512px;
-    height:512px;
-    cursor: pointer;
-    image-rendering: optimizeSpeed;
-    image-rendering: -moz-crisp-edges;
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: optimize-contrast;
-    -ms-interpolation-mode: nearest-neighbor;
-}
-
-#canvasoverlay {
-    margin: auto;
-    padding: 0;
-    width:511px;
-    height:511px;
-    cursor: pointer;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
-    border:solid 1px #777;
-    display: table;
-    text-align: center;
-}
-
-#equation {
-    width:auto;
-    padding:10px;
-    margin:auto;
-    display:block;
-    clear:both;
-    text-align:center;
-    font-size:75%;
-}
-
-
-#canvasdiv {
-    padding: 0;
-    width:912px;
-    height: auto;
-    margin: auto auto;
-    margin-top: 25px;
-}
-
-.controlbox {
-    width:200px;
-    height:512px;
-    float:left;
-}
-
-.controls {
-    width:100px;
-    float:right;
-}
-
-.infotext {
-    float:right;
-    margin-left:10px;
-    padding-top:-60px;
-    width:190px;
-    height:auto;
-    font-size:80%;
-}
-
-.control {
-    text-align:right;
-    width:100%;
-    font-size: 97%;
-}
-
-.controltext {
-    font-size: 95%;
-    clear:both;
-    display:block;
-    padding-top:5px;
-}
-
-input[type=number] {
-    margin: 1px 10px;
-    width:50px;
-    font-size: 85%;
-    -webkit-appearance: none;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
-    border:solid 1px #777;
-    padding: 1px 1px 1px 1px;
-}
-
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button {
-    /* display: none; <- Crashes Chrome on hover */
-    -webkit-appearance: none;
-    margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
-    opacity: 0;
-    pointer-events: none;
-}
-input[type=number]::-webkit-inner-spin-button, 
-input[type=number]::-webkit-outer-spin-button { 
-  -webkit-appearance: none; 
-  margin: 0; 
-}
-input[type=number] {-moz-appearance: textfield;}
-
-.button_container {
-    margin-top:4px;
-    margin-left:1px;
-    width:200px;
-    font-size:80%;
-}
-
-.button {
-    font-size:95%;
-    text-decoration: none;
-    float:left;
-    margin:-1px -1px 0px 0px;
-    border:solid 1px #777;
-    width:auto;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
-    padding: 3px 7px 3px 7px;
-}
-.button:hover {
-    background: #fff;
-    text-decoration: none;
-    color: #333;
-    border:solid 1px #777;
-}
-
-.squarebutton {
-    text-decoration: none;
-    float:left;
-    margin:-1px -1px 0px 0px;
-    border:solid 1px #777;
-    width:  18px;
-    height: 18px;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
-    padding: 0px;
-    text-align: center;
-    line-height: 18px;
-}
-.squarebutton:hover {
-    background: #fff;
-    text-decoration: none;
-    color: #333;
-    border:solid 1px #777;
-}
-.squarebutton div.info {
-    position: absolute; 
-    left: -9999px; 
-}
-.squarebutton:hover div.info {
-    position: absolute;
-    left:0px;  
-    top:-29px;  
-    width:200px;
-    color:#fff;
-    font-color:#fff;
-    text-align: left;
-    vertical-align: top;
-    font-size:9pt;
-    font-family:sans-serif;
-}
-
-.overlay{
-    background:#333;
-    color:#fff;
-    font-color:#fff;
-    position:fixed;
-    width:100%;
-    height:100%;
-    top:0px;
-    left:0px;
-    z-index:1000;
-}
-
-.clickblocker{
-    opacity: 0.0;
-    background:#333;
-    color:#fff;
-    font-color:#fff;
-    position:fixed;
-    width:100%;
-    height:100%;
-    top:0px;
-    left:0px;
-    z-index:1000;
-}
-
-/* make unselectable things that ought not be selected */
-.button, .control, .controls, .controlbox, .controltext, .button_container,
-#equation, #maincanvas, #canvasoverlay, .clickblocker, .overlay,
-.squarebutton .info {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -khtml-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-    cursor: default;
-}
-
-/* make clickable things have the hand cursor */
-.button, #maincanvas, #canvasoverlay, .squarebutton {
-    cursor: pointer;
-}
-
-
-/* http://stackoverflow.com/questions/396145/how-to-vertically-center-a-div-for-all-browsers 
-*/
-.outer {
-    display:  table;
-    position: absolute;
-    height:   100%;
-    width:    100%;
-}
-
-.middle {
-    display: table-cell;
-    vertical-align: middle;
-}
-
-</style>
+<link rel="stylesheet" href="diffusion_style.css" type="text/css">
 
 <!-- import the MathJax scripts -->
 <script type="text/x-mathjax-config">
@@ -256,16 +12,6 @@ input[type=number] {-moz-appearance: textfield;}
 </script>
 <script type="text/javascript"
   src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
-</script>
-
-<!-- analytics -->
-<script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
- m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-  ga('create', 'UA-64211605-1', 'auto');
-  ga('send', 'pageview');
 </script>
 
 </head>
@@ -292,99 +38,64 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
         <div style="clear:both;display:block">
             <div class="controls">
                 Inhibitory
-                <div class="control">$a_{ii}$  
-                    <input type="number" step="0.02" max="100" min="0"    name="Aii" value="3.0"/>
+                <div class="control">$\tau_i$  
+                    <input type="number" step="0.02" max="100" min="0"    name="Ti"  value="20.0"/>
                 </div>
                 <div class="control">$a_{ie}$  
                     <input type="number" step="0.02" max="100" min="0"    name="Aie" value="12.0"/>
                 </div>
-                <div class="control">$\tau_i$  
-                    <input type="number" step="0.02" max="100" min="0"    name="Ti"  value="20.0"/>
-                </div>
                 <div class="control">$\theta_i$
                     <input type="number" step="0.02" max="100" min="-100" name="Hi"  value="3.5"/>
-                </div>
-                <div class="control">$g_i$     
-                    <input type="number" step="0.02" max="100" min="-100" name="Gi"  value="0.0"/>
-                </div>
-                <div class="control">$\sigma_{i}$
-                    <input type="number" step="0.02" max="100" min="0"    name="Si"  value="1.5"/>
-                </div>
-                <div class="control">$N_i$
-                    <input type="number" step="0.02" max="100" min="0"    name="Ni"  value="0.1"/>
-                </div>
-                <div class="control">$\alpha_i$
-                    <input type="number" step="0.02" max="1000" min="0"    name="ai"  value="5.0"/>
-                </div>
-                <div class="control">$\beta_i$
-                    <input type="number" step="0.02" max="100"  min="-100" name="bi"  value="0.0"/>
                 </div>
             </div>
             <div class="controls">
                 Excitatory
+                <div class="control">$\tau_e$  
+                    <input type="number" step="0.02" max="100" min="0"    name="Te"  value="10.0"/>
+                </div>
                 <div class="control">$a_{ee}$  
                     <input type="number" step="0.02" max="100" min="0"    name="Aee" value="10.0"/>
                 </div>
                 <div class="control">$a_{ei}$  
-                    <input type="number" step="0.02" max="100" min="0"    name="Aei" value="8.5"/>
+                    <input type="number" step="0.02" max="100" min="0"    name="Aei" value="12.0"/>
                 </div>
-                <div class="control">$\tau_e$  
-                    <input type="number" step="0.02" max="100" min="0"    name="Te"  value="10.0"/>
+                <div class="control">$\sigma_e$
+                    <input type="number" step="0.02" max="100" min="0"    name="Se"  value="0.1"/>
                 </div>
                 <div class="control">$\theta_e$
                     <input type="number" step="0.02" max="100" min="-100" name="He"  value="2.0"/>
                 </div>
-                <div class="control">$g_e$     
-                    <input type="number" step="0.02" max="100" min="-100" name="Ge"  value="0.8"/>
+            </div>
+            <div class="controls">
+                Refractory
+                <div class="control">$\tau_a$  
+                    <input type="number" step="0.02" max="100" min="0"    name="Ta"  value="10.0"/>
                 </div>
-                <div class="control">$\sigma_{e}$
-                    <input type="number" step="0.02" max="100" min="0"    name="Se"  value="0.6"/>
-                </div>
-                <div class="control">$N_e$
-                    <input type="number" step="0.02" max="100" min="0"    name="Ne"  value="0.1"/>
-                </div>
-                <div class="control">$\alpha_e$
-                    <input type="number" step="0.02" max="1000" min="0"    name="ae"  value="5.0"/>
+                <div class="control">$\gamma_a$
+                    <input type="number" step="0.02" max="1000" min="0"    name="Ga"  value="5.0"/>
                 </div>
                 <div class="control">$\beta_e$    
-                    <input type="number" step="0.02" max="100"  min="-100" name="be"  value="0.0"/>
+                    <input type="number" step="0.02" max="100"  min="-100" name="Be"  value="0.0"/>
                 </div>
             </div>
-        </div>
-        <br>
-        <div style="clear:both;display:block">
             <div class="controls">
                 Time stepping
                 <div class="control">$\Delta t$
                     <input type="number" step="0.02" max="100"  min="0"    name="dt"  value="2.0"/>
                 </div>
-                <div class="control">Skip
-                    <input type="number" step="1" max="50"  min="1"    name="display_every"  value="3"/>
-                </div>
             </div>
             <div class="controls">
-                Stimulus
-                <div class="control">$A$       
-                    <input type="number" step="0.02" max="100"  min="-100" name="Amp" value="0.5"/>
+                Driving
+                <div class="control">$N_e$
+                    <input type="number" step="0.02" max="100" min="0"    name="Ne"  value="0.1"/>
                 </div>
-                <!--<div class="control">$T$       
-                    <input type="number" step="0.02" max="1000" min="0"    name="T"   value="50.0"/>
-                </div>-->
             </div>
         </div>   
-
         
         <div style="position:absolute;bottom:0;left:0;">
-        
-        <div class="controltext">
-            Presets
-        </div>
-        <div class="button_container" id="presets">
-        </div>
-        
-        </div>
-        
-        
+        <div class="controltext">Presets</div>
+        <div class="button_container" id="presets"></div>        
+        </div>        
     </div>
     
     <div style="position:relative;">
@@ -400,17 +111,15 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
         I-cell firing rate ∈[0,1]
     </div>
     <!-- title for plot on bottom left -->
-    <div style='position:absolute;bottom:-276px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Peripheral region</div>
+    <div style='position:absolute;bottom:-276px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Steady-state adaptation</div>
     
     <!-- title for plot on top left -->
-    <div style='position:absolute;bottom:-20px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E-cell firing rate</div>
+    <div style='position:absolute;bottom:-20px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Firing Rate Red = E, Green = Ie</div>
     <!-- title for plot on top right -->
-    <div style='position:absolute;bottom:-20px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>I-cell firing rate</div>
+    <div style='position:absolute;bottom:-20px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Adaptation Red = E, Green = I</div>
     
     <!-- title for plot on bottom right -->
-    <div style='position:absolute;bottom:-276px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Stimulated region</div>
-    
-    
+    <div style='position:absolute;bottom:-276px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>E/I trajectories in phase space</br>Without adaptation</div>
     
     <div id='canvasoverlay' style="position:absolute; left:200px; z-index: 2;">
         <div style="display: table-cell; vertical-align: middle;">
@@ -418,32 +127,16 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
         </div>
     </div>
     
-        
-
-    
     </div>
 
     <!-- just here for padding -->
     <div class="infotext">
-        <h3 style="margin-top:0px;">Wave State Demonstration</h3>
+        <h3 style="margin-top:0px;">Wilson-Cowan with diffusive coupling</h3>
         <span style="font-size:80%;">
-        This demonstration is designed to illustrate a hypotehtical wave 
-        mode seen during optogentic stimulation in motor cortex. In this 
-        mode, the stimulated region forces damped traveling waves in the 
-        periphery at a ratio of 2:1. Additionally, there is instability 
-        inside the stimulated region, leading to traveling waves across 
-        the stimulation area that originate at the boundary. The Stimulated 
-        region has a radius of 30 pixels, the stimulus
-        mask has been smoothed with a Gaussian kernel with a standard
-        deviation of 4 piexls, given the stimulated region a soft boundary.
-        Heterogeneity is added to the time constants (in a somewhat hacked
-        way that I can explain or try to clean up), and is also smoothed 
-        with a Gaussian kernel of 4 pixels. These new additions are not
-        reflected in the equations.  
+        Info details here. TODO. 
         </span>
         <br/>    
-        <!--<span style="font-size:80%;">©2015 Michael Rule all rights reserved</span>-->
-    
+
         <div class="controltext" style="width:240px;">
         </div>
         <div class="controltext" style="width:240px;">
@@ -464,12 +157,10 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
     </div>
     
     <div id="equation">
-    \[\textrm{E-cells:  } \tau_e \dot{U_e} = -U_e + f( a_{ee}  \cdot K_e \star U_e - a_{ie}  \cdot K_i \star U_i - \theta_e + g_e S(t) - \beta_e V_e)\]
-    \[\textrm{I-cells:  } \tau_i \dot{U_i} = -U_i + f( a_{ei}  \cdot K_e \star U_e - a_{ii}  \cdot K_i \star U_i - \theta_i + g_i S(t) - \beta_i V_i )\]
-    \[\textrm{E-cell adaptation:  } \alpha_e \dot{V_e} = U_e - V_e \]
-    \[\textrm{I-cell adaptation:  } \alpha_i \dot{V_i} = U_i - V_i \]
-    \[\textrm{Interaction kernel (normalized to 1):  } K_{e,i}(x,y) \propto \exp(\frac{1}{2} \frac{x^2}{\sigma_{x\,e,i}^2}+\frac{1}{2} \frac{y^2}{\sigma_{y\,e,i}^2})\]
-    
+\[\tau_e \dot U_e = - U_e + f\left[ a_{ee} \left(\sigma_e \nabla^2 U_e + U_e \right) - a_{ei} U_i - \beta V_e - \theta_e
+\right]\]
+\[\tau_i \dot U_i = - U_i + f \left[ a_{ei} U_e - \theta_i \right]\]
+\[\tau_a \dot V_e = (U_e - V_e) \cdot (\gamma H(U_a - U_e) + 1)\]
     </div>
 </div>
 </div>
@@ -603,35 +294,36 @@ function main() {
 
     var CONVOLUTION = blurGaussianFloat32SeparableAnisotropicAbsorbingRenormalizingPowerOfTwoSize//blurGaussianFloat32SeparableAnisotropicAbsorbingRenormalizing;/// blurGaussianFloat32SeparableAnisotropicAbsorbing;
 
-    var dt  = 1.0;      // Euler integrator time step
-    var Te  = 10;       // Excitatory population time constant (ms)
-    var Ti  = 40;       // Inhibitory population time constant (ms)
-    var Se  = 0.6;     // Excitatory population spread (standard deviations)
-    var Si  = 0.1; // Inhibitory population spread (standard deviations)
-    var Aee = 11;      // E-E coupling Aeight
-    var Aie = 12;       // Excitation of Inhibitory coupling Aeight
-    var Aei = 8.5;      // Inhibition of Excitatory coupling Aeight
-    var Aii = 3.0;      // I-I coupling Aeight
-    var He  = 2.3;      // Bias in E cell synaptic input
-    var Hi  = 3.5;      // Bias in I cell synaptic input
-    var Ne  = 3.0;      // Noise level (uniform) in E cells
-    var Ni  = 0.0;      // Noise level (uniform) in I cells
-    var T   = 125.0;    // Oscillatory period (ms)
-    var Ge  = 0.8;      // Input drive to E cells
-    var Amp = 0.7;
-    var Gi  = 0.0;      // Input drive to I cells
-    var Str = 0.8;      // Sinusoidal input stimulus is thresholded
-    var ai  = 5.0;      // Timescale of inhibitory adaptation
-    var ae  = 24.0;      // Timescale of excitatory adaptation
-    var bi  = 0.0;      // Strength of Inhibitory adaptation
-    var be  = 1.0;      // Strength of Excitatotu adaptation
+    var dt  = 1.0;     // Euler integrator time step
+
+    // Variables affecting excitatory population
+    var Te  = 10;      // Excitatory population time constant (ms)
+    var Se  = 0.1;     // Lateral coupling weight
+    var Aee = 5;       // E-E coupling Aeight
+    var Aei = 5;       // E-E coupling Aeight
+    var He  = 2.5;       // Bias in E cell synaptic input
+
+    // Variables affecting inhibitory population
+    var Ti  = 40;      // Inhibitory population time constant (ms)
+    var Aie = 5;       // Excitation of Inhibitory coupling Aeight
+    var Hi  = 2.5;       // Bias in I cell synaptic input
+
+    // Varaibles affecting refractory process
+    var Ta  = 40;      // Refractory process time constant (ms)
+    var Ga  = 10;      // Time-warp factor for activation of refractory process
+    var Be  = 1.0;     // Strength of Excitatotu adaptation
+
+    // Variables related to inputs
+    var Ne  = 1;       // Noise level (uniform) in E cells
+
+    // Other configuration variables
     var mask_radius = 20;
-    var display_every = 13; // don't show every time step
+    var display_every = 1; // don't show every time step
     var running = 0;
     var structure_scale=3;
-    
-    Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Si=2;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Se=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;
-    
+        
+    Ti=3;Aie=3;Hi=1.5;Te=3;Aee=9.4;Aei=5;Se=0.2;He=1.2;Ta=200;Ga=200;Be=1.8;dt=1;Ne=1.5;
+
     // step function
     function heav(z) {
         return z<0.0? 0.0 : z==0.0? 0.5 : 1.0;}
@@ -639,12 +331,9 @@ function main() {
     // firing nonlinearity
     function F(x) {
         return 1/(1+Math.exp(-x)); }
-
-    function Stim(t) {
-        var s = Math.sin(2*Math.PI * t / T);
-        return heav(s-Str)*Amp;
-    }
     
+    // Make a lookup table for firing rate nonlinearity
+    // since exponentiation is too slow
     var nonlinearity_lookup = new Float32Array(new ArrayBuffer(4096*4));
     for (var i=0; i<4096; i++) {
         var x = (i-2048)/256.0;
@@ -656,19 +345,17 @@ function main() {
         if (i>=4096) return 1.0;
         return nonlinearity_lookup[i]
     }
+
     
     var Ue = new Float32Array(new ArrayBuffer(N*4));
     var Ui = new Float32Array(new ArrayBuffer(N*4));
-    var Ae = new Float32Array(new ArrayBuffer(N*4));
-    var Ai = new Float32Array(new ArrayBuffer(N*4));
+    var Ve = new Float32Array(new ArrayBuffer(N*4));
     var Uec= new Float32Array(new ArrayBuffer(N*4));
     var Out= new Float32Array(new ArrayBuffer(N*4));
     var Uic= new Float32Array(new ArrayBuffer(N*4));
     var temp  = new Float32Array(new ArrayBuffer(N*4)); 
     var temp2 = new Float32Array(new ArrayBuffer(N*4));   
     var mask = new Float32Array(new ArrayBuffer(N*4));   
-    var tauE = new Float32Array(new ArrayBuffer(N*4));   
-    var tauI = new Float32Array(new ArrayBuffer(N*4));   
 
     /*
     Define a mapping from simulation space into color space.
@@ -684,6 +371,9 @@ function main() {
     
     var plot_padding = 72>>downscale;
     var SW = W-plot_padding|0;
+   
+    var _mean_Ve_ = 0.5;
+    var _mean_Vi_ = 0.5;
     
     function locate_zeros(buffer1,buffer2) {
         /* Assuming homogenous case locate zeros, in this case by brute 
@@ -693,18 +383,15 @@ function main() {
         var best=1e30;    
         var se = -He;
         var si = -Hi;
-        var aet = dt/ae;
-        var ait = dt/ai;
         var tet = dt/Te;
         var tit = dt/Ti;
-        var xe = Aee-be;
-        var xi = bi+Aii;
+        var xe = Aee-Be;
         for (var y=0; y<SW; y++) {
             var ui = y/SW
             for (var x=0; x<SW; x++) {
                 var ue = x/SW
                 var due = lookup_F(xe*ue-Aei*ui+se)-ue;
-                var dui = lookup_F(Aie*ue-xi*ui+si)-ui;
+                var dui = lookup_F(Aie*ue-Hi)-ui;
                 var i = x+SW*y;
                 if (buffer1!=null) buffer1[i] = due;
                 if (buffer2!=null) buffer2[i] = dui;
@@ -720,27 +407,23 @@ function main() {
     }
     
     
-    
-    function locate_zeros_stimulated(buffer1,buffer2) {
+    function locate_zeros_noadaptation(buffer1,buffer2) {
         /* Assuming homogenous case locate zeros, in this case by brute 
         force grid search */
         var minx=-1;
         var miny=-1;
         var best=1e30;    
-        var se = -He+Amp*Ge;
-        var si = -Hi+Amp*Gi;
-        var aet = dt/ae;
-        var ait = dt/ai;
+        var se = -He;
+        var si = -Hi;
         var tet = dt/Te;
         var tit = dt/Ti;
-        var xe = Aee-be;
-        var xi = bi+Aii;
+        var xe = Aee-Be*_mean_Ve_;
         for (var y=0; y<SW; y++) {
             var ui = y/SW
             for (var x=0; x<SW; x++) {
-                var ue = x/SW;
-                var due = lookup_F(xe*ue-Aei*ui+se)-ue;
-                var dui = lookup_F(Aie*ue-xi*ui+si)-ui;
+                var ue = x/SW
+                var due = lookup_F(xe*ue-Aei*ui-He)-ue;
+                var dui = lookup_F(Aie*ue-Hi)-ui;
                 var i = x+SW*y;
                 if (buffer1!=null) buffer1[i] = due;
                 if (buffer2!=null) buffer2[i] = dui;
@@ -807,7 +490,7 @@ function main() {
         }
         
         //do that again for the stimulated region
-        var p = locate_zeros_stimulated(temp,temp2);
+        var p = locate_zeros_noadaptation(temp,temp2);
         // trace nullclines
         for (var y=1; y<SW; y++) {
             for (var x=1; x<SW; x++) {
@@ -839,18 +522,20 @@ function main() {
     
     
     function sim2image() {
-        for (var i=N;--i;) temp2[i]=0.5*(Ui[i]+Ue[i]);
-        CONVOLUTION(temp2,Out,temp,W,H,Sb,Sb);
         var dY = H*2*W;
         for (var y=0;y<W;y++) {
             var Y = y*W*2;
             for (var x=0;x<W;x++) {
                 i = x+y*W;
-                data[  x + Y   ] = colormap_colors[Ue[i]*255|0]
-                data[x+W + Y   ] = colormap_colors[Ui[i]*255|0]
+                var UE = Ue[i]*255|0;
+                var UI = Ui[i]*255|0;
+                var VE = Ve[i]*255|0;
+                var UB = Math.abs(UE-UI)|0;
+                var VB = Math.abs(VE)|0;
+                data[  x + Y   ] = (UB*0x010000) + UI*(0x0100) + (UE*0x01) + 0xff000000;
+                data[x+W + Y   ] = (VB*0x010000) + (VE*0x01) + 0xff000000;
                 data[  x + Y+dY] = 0x00000000;
                 data[x+W + Y+dY] = 0x00000000;
-                //data[x+W + Y+dY] = colormap_colors[mask[i]*255|0]
             }
         }
         render_scatter();
@@ -885,7 +570,6 @@ function main() {
         rand = Math.floor(Math.random()*0x1000000);}
     function weakrand() { 
         return ((rand^=rand>>2^rand<<1)&0xffff) * 1.52587890625e-05;}
-
     function weakrand2() { 
         return ((rand^=rand>>2^rand<<1^rand<<7)&0xffff) * 1.52587890625e-05;}
 
@@ -894,10 +578,9 @@ function main() {
         for (var y=0;y<H;++y) { seedrand();
         for (var x=0;x<W;++x) {
             var i = x+W*y;
-            Ue[i] = weakrand();//ue+r*Math.cos(t);
-            Ui[i] = weakrand2();//ui+r*Math.sin(t);
-            Ae[i] = Ue[i];
-            Ai[i] = Ui[i];
+            Ue[i] = weakrand2();
+            Ui[i] = weakrand2();
+            Ve[i] = Ue[i];
         }}
         showSim();
     }
@@ -913,8 +596,7 @@ function main() {
             var t = 6.283185307179586*weakrand()
             Ue[i] = ue+r*Math.cos(t);
             Ui[i] = ui+r*Math.sin(t);
-            Ae[i] = Ue[i];
-            Ai[i] = Ui[i];
+            Ve[i] = Ue[i];
         }
         showSim();
     }
@@ -950,8 +632,7 @@ function main() {
             var r = 0.05*weakrand()
             Ue[i] = r*s+ue;
             Ui[i] = r*t+ui;
-            Ae[i] = Ue[i];
-            Ai[i] = Ui[i];
+            Ve[i] = Ue[i];
         }
         showSim();
     }
@@ -971,24 +652,6 @@ function main() {
         }
     }
     randomize();
-    // randomized taus (fixed for now)
-    for (var y=0;y<H;++y) { seedrand();
-        for (var x=0;x<W;++x) {
-            var i = x+W*y;
-            tauE[i] = weakrand();
-            tauI[i] = weakrand2();
-        }
-    }
-    CONVOLUTION(tauE,tauE,temp,W,H,structure_scale,structure_scale);
-    CONVOLUTION(tauI,tauI,temp,W,H,structure_scale,structure_scale);
-    console.log('Simulation buffers randomized');
-    
-    /* Test the Gaussian blur code */
-    CONVOLUTION(Ue,Ue,temp,W,H,Se,Se);
-    CONVOLUTION(Ui,Ui,temp,W,H,Si,Si);
-    showSim();
-    console.log('Convolution test passed');
-    
     
     /*
     Prepare the user interface controls.
@@ -1068,7 +731,8 @@ function main() {
     }
 
     presets=[
-    ['Spiral wave edge-origin with 2:1 forcing','perturbhomogeneous','Aii=11;Aie=20;Ti=36;Hi=4;Gi=0.3;Si=2;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Se=4;Ne=0;ae=50;be=1;dt=4;display_every=1;Amp=7;Sb=0.1;'],
+    ['default','randomize','Ti=10;Aie=10;Aei=10;Hi=0;Te=5;Aee=10;Se=1;He=0;Ta=50;Be=1;dt=1;Ge=1;Ne=1;'],
+    ['percolate','randomize','Ti=3;Aie=3;Hi=1.5;Te=3;Aee=9.4;Aei=5;Se=0.2;He=1.2;Ta=200;Ga=200;Be=1.8;dt=1;Amp=0;Ge=0;Ne=1.5;']
     ];
     
     /*
@@ -1120,11 +784,6 @@ function main() {
     */
     
     
-    function convolve() {    
-        CONVOLUTION(Ue,Uec,temp,W,H,Se,Se);
-        CONVOLUTION(Ui,Uic,temp,W,H,Si,Si);
-    }
-    
     
     var middle=W/2;
     for (var y=0;y<H;y++) {
@@ -1139,25 +798,50 @@ function main() {
     CONVOLUTION(mask,mask,temp,W,H,structure_scale,structure_scale);
     
     function updateState(t) {    
-        var aet = dt/ae;
-        var ait = dt/ai;
+        //console.log('updateState '+t);
+        var tallyAE = 0.;
+        var tallyAI = 0.;
         var tet = dt/Te;
         var tit = dt/Ti;
+        var tat = dt/Ta;
         var se = -He-0.5*Ne;
-        var si = -Hi-0.5*Ni;
+        var Ce = (1-Se*4);
+
+        var ue,ui,ve,prev,next,abov,down,Lp,dUe,dUi,dVe,v,s;
+
         for (var y=0;y<H;y++) {
             var Y=y*W;
             var dy=y-middle;
+
+            var ydown = y>1?(y-1)*W:(H-1)*W;
+            var yabov = y<H-1?(y+1)*W:0;
+
+            ue   = Ue[Y+W-1];
+            next = Ue[Y+0];
+
             for (var x=0;x<W;x++) {
                 var i=x+Y;
                 var dx = x-middle;
-                var s = mask[i]*Amp;
-                Ue[i] += (lookup_F(Aee*Uec[i]-Aei*Uic[i]+se+weakrand()*Ne+s*Ge-be*Ae[i])-Ue[i])*tet;///(.5+tauE[i]);
-                Ui[i] += (lookup_F(Aie*Uec[i]-Aii*Uic[i]+si+weakrand()*Ni+s*Gi-bi*Ai[i])-Ui[i])*tit;///(.5+tauE[i]);
-                Ae[i] += (Ue[i]-Ae[i])*aet;
-                Ai[i] += (Ui[i]-Ai[i])*ait;
+
+                prev = ue;
+                ue = next;
+                next = Ue[Y+(x+1&0xff)];
+                abov = Ue[x+ydown];
+                down = Ue[x+yabov];
+                ui = Ui[i];
+                ve = Ve[i];
+                Lp = Se*(prev+next+abov+down)+Ce*ue;
+                dUe = lookup_F(Aee*Lp-Aei*ui-Be*ve+se+weakrand()*Ne)-ue;
+                dUi = lookup_F(Aie*ue-Hi)-ui;
+                v = ue-ve;
+                dVe = v;
+                if (v>0) dVe += Ga*v;
+                Ue[i] += dUe*tet;
+                Ui[i] += dUi*tit;
+                Ve[i] += dVe*tat;
             }
         }
+        _mean_Ve_ = tallyAE / (H*W);
     }
     
     //http://www.paulirish.com/2011/requestanimationframe-for-smart-animating/
@@ -1215,7 +899,6 @@ function main() {
         // ... that would take a lot more code. 
         try {
             seedrand();
-            convolve();
             updateState(timestep*dt);
             timestep += 1;
         }  catch (err) {
