@@ -1,8 +1,0 @@
-<canvas width=256 height=256><script>v=document.body.lastChild
-z=v.getContext('2d')
-d=z.getImageData(m=0,b=[],N=256,N)
-R=()=>{
-for(i=K=N*N-1;i--;)x=i&N-1,y=i/N,X=(x-y)*.7+m.offsetX|0,Y=(x+y)*.7+m.offsetY-128|0,d.data[i*4+3]=N-(b[i]=X>128?b[X+Y*N&K]*.9:N)
-z.putImageData(d,0,0)
-setTimeout(R,0)}
-R(v.onmousemove=(e)=>{m=e})</script>
