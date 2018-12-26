@@ -17,7 +17,7 @@ rmtex
 echo "Generating static file browsing links"
 # Generate github pages browsing links
 # (stopgap until official documentation is prepared)
-./Gittools/maketree.py
+./gittools/maketree.py
 
 # Clean up editor and temp files from the local directory (even if not 
 # tracked by git)
