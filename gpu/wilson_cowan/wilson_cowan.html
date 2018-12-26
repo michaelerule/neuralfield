@@ -1,0 +1,160 @@
+<html>
+<script src="../lib/colormaps.js"></script>
+<script src="../lib/gpgpu.js"></script>
+<script src="../lib/gpugaussian.js"></script>
+<script src="../lib/gpurand.js"></script>
+<script src="../lib/parameters.js"></script>
+
+<script id="wc-parameters"> type="x-fragment-parameters">
+// Note: this is not Javascript and these values are not
+// directly accessible to either the main function or the wilson-
+// cowan kernel below. The parameters.js library must be used to
+// parse and handle this parameter list. This bridges some of the
+// issues with interfacing a weakly typed language like javascript
+// with the strong typing of WebGLSL. Also, passing parameters to
+// shaders does not by default use a functional syntax, as the WebGL
+// API more or less exposes a state machine. This circumvents some
+// of these limitations.
+
+// Arrays passed to shader
+sampler2D Uin;
+sampler2D Uconv;
+sampler2D noise;
+
+// Parameters, may be compiled or passed as arguments
+float dt  = 1.0;   // Euler integrator time step
+float Te  = 10;    // Excitatory population time constant (ms)
+float Ti  = 20;    // Inhibitory population time constant (ms)
+float Aee = 10.5;  // E-E coupling Aeight
+float Aie = 8.5;   // Excitation of Inhibitory coupling Aeight
+float Aei = 12.0;  // Inhibition of Excitatory coupling Aeight
+float Aii = 3.0;   // I-I coupling Aeight
+float He  = 2.0;   // Bias in E cell synaptic input
+float Hi  = 3.5;   // Bias in I cell synaptic input
+float Ne  = 3.0;   // Noise level (uniform) in E cells
+float Ni  = 0.0;   // Noise level (uniform) in I cells
+float ai  = 5.0;   // Timescale of inhibitory adaptation
+float ae  = 24.0;  // Timescale of excitatory adaptation
+float bi  = 0.0;   // Strength of Inhibitory adaptation
+float be  = 0.0;   // Strength of Excitatory adaptation
+
+// Kernel standard deviations, actually not used yet
+float Se  = 0.6;   // Excitatory population spread
+float Si  = 0.1;   // Inhibitory population spread
+
+// Stimulus parameters -- these should be handled CPU side
+float T   = 125.0; // Stimulus oscillatory period (ms)
+float Amp = 0.7;   // Simulus amplitude
+float Ge  = 1.0;   // Input drive to E cells
+float Gi  = 0.0;   // Input drive to I cells
+float Str = 0.8;   // Sinusoidal input stimulus is thresholded
+float s;
+</script>
+<script id="wc" type="x-fragment">
+#define twopi 6.283185307179586
+#define F(x) (1./(1.+exp(-(x))))
+void main() {
+    vec2 XY   = gl_FragCoord.xy/vec2(W,H);
+    vec4 U    = texture2D(Uin  , XY); // raw fields
+    vec4 Uc   = texture2D(Uconv, XY); // convolved fields
+    vec4 n    = texture2D(noise, XY); // uniform noise
+    // Make Gaussian noise correctly scaled by dt using BoxMuller
+    vec2 R    = sqrt(-2.*log(n.xy));
+    vec2 T    = twopi*n.zw;
+    vec4 N    = vec4(R*cos(T),R*sin(T))*sqrt(dt);
+    float Ae  = F(Aee*Uc.x-Aie*Uc.y-He+Ge*s-U.z*be+Ne*N.x);
+    float Ai  = F(Aei*Uc.x-Aii*Uc.y-Hi+Gi*s-U.w*bi+Ne*N.x);
+    float Ue  = U.x + (Ae -U.x)*(dt/Te);
+    float Ui  = U.y + (Ai -U.y)*(dt/Ti);
+    float Ve  = U.z + (U.x-U.z)*(dt/ae);
+    float Vi  = U.w + (U.y-U.w)*(dt/ai);
+    gl_FragColor = floor(255.*vec4(Ue,Ui,Ve,Vi)+.5)/255.;
+}
+</script>
+
+<script id="colormap" type="x-shader/x-fragment">
+uniform sampler2D Uin;
+void main() {
+    vec2  XY = gl_FragCoord.xy/vec2(W,H);
+    vec4  U  = texture2D(Uin   ,XY);
+    float Ue  = U.r;
+    float Ui  = U.g;
+    gl_FragColor = vec4(Ue,Ui,abs(Ue-Ui)*3.0,1.);
+}
+</script>
+
+<script>
+
+// This is the main script that will run when the website loads
+function main()
+{
+    // Retrieve a handle to the canvas element
+    var canvas = $("maincanvas");
+    // Create a WebGL context on the canvas, abort if fail
+    var gl = getRasterGL(canvas);
+    if (!gl) OUT;
+
+    signature = get_parameters('wc-parameters');
+    var wc_template = getTypedProgram('wc-parameters','wc');
+    parameters = {
+      dt  : 1.0,
+      Te  : 10.0,
+      Ti  : 20.0,
+      Aei : 12.0,
+      Aii : 3.0,
+      Aee : 10.5,
+      Aie : 8.5,
+      Hi  : 3.5,
+      He  : 2.0,
+      Ni  : 0.0,
+      Ne  : 0.0,
+      Gi  : 0.0,
+      Ge  : 1.0,
+      bi  : 0.0,
+      be  : 0.0
+    };
+    cb     = compile_bind(signature,parameters);
+    header = cb[0];
+    resid  = cb[1];
+    var wc_source = header + $('wc').text;
+    var wc = buildRasterProgram(gl,wc_source);
+
+    var color  = getRasterProgram(gl,'colormap');
+    var copy   = GPUcopy(gl);
+    var blur   = GPUGaussianMultiBlur(gl,1,2,1,1);
+    var noise  = GPUNoise(gl);
+    var temp   = newBasicFramebuffer(gl,{wrap : gl.REPEAT});
+    var U      = newBasicFramebuffer(gl,{wrap : gl.REPEAT});
+    var UC     = newBasicFramebuffer(gl,{wrap : gl.REPEAT});
+    var noise_buffer = newBasicFramebuffer(gl,{wrap : gl.REPEAT});
+
+    noise.randomize( U );
+    noise.randomize( noise_buffer );
+
+    var t = 0;
+    function animate() {
+        setTimeout(function(){
+            for (var i=0; i<1; i++) {
+                noise(noise_buffer,temp);
+                blur(U,temp,UC);
+                wc({
+                    s     : .3*(Math.sign(Math.sin(t*3.1415926*6.85/500.))+1),
+                    Uin   : U,
+                    Uconv : UC,
+                    noise : noise_buffer
+                    },temp);
+                copy(temp,U);
+            }
+            color({Uin:temp});
+            t += Number(parameters['dt']);
+            requestAnimationFrame(animate);
+        },0);
+    }
+    animate();
+}
+
+</script>
+<body onload="javascript:main()">
+<canvas id='maincanvas' style="width:512px;height:512px;"></canvas>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<canvas><script>
+c=document.body.lastChild// get the canvas (it's the only element)
+c.width=c.height=W=256   // set canvas size (and width constant)
+Z=c.getContext('2d')     // get graphics context
+l=Z.getImageData(0,0,W,W)// get handle to image data buffer
+N=W*W                    // define a constant the length of the data buffer
+I=()=>Float32Array(N)    // define short function for initializing buffers
+t=I()                    // make scratch for convolution intermediate values
+b=I()                    // this will be the E-cell buffer
+f=I()                    // this will be the I-cell buffer
+g=I()                    // buffer to hold blurred E-cell state
+h=I()                    // buffer to hold blurred I-cell state
+K=(w,t,W)=>{             // function for separable convolution.
+                         // blurs from NxN buffer t into 256x256 buffer w
+                         // W is the step size. If it is 1, the blur will be
+                         // horizontal. If it is 256, the blur will be 
+                         // vertical. Gaussian is convolution is separable
+                         // in x/y, so we can do the 2D blur by first 
+                         // doing the x and then the y
+    for(i=N;i--;){       // iterate over all points
+        w[i]=0;          // initialize accumulator to zero
+        for(j=3;j--;)    // iterate over kernel
+                         // The expression (j*4+2&7) saves one character over
+                         // the more readable [2,6,2][j]/5
+                         // we wrap indecies in x and y by masking with
+                         // 0xffff i.e. N-1
+            w[i]+=(j*4+2&7)/5*t[W*j-W+i&N-1]
+    }
+}
+w=()=>{
+    K(t,b,1)             // convolve E-cell buffer in x direction
+    K(g,t,W)             // convolve E-cell buffer in y direction
+    K(t,f,1)             // convolve I-cell buffer in x direction
+    K(h,t,W)             // convolve I-cell buffer in y direction
+    for(i=N;i--;){       // for every point
+                         // B is an update function
+                         // includes firing rate nonlinarity and some of the
+                         // Wilson-cowan update -- expression have been
+                         // refactored to minimize size
+        B=(j)=>.7/(1+Math.exp(j+3+4*h[i]-5*g[i]-Math.random()))
+        b[i]=B(6*h[i]-g[i])+b[i]*.3 // update E-cell field
+        f[i]=B(1)*.13+f[i]*.91      // update I-cell field
+        l.data[i*4+3]=b[i]*(W-1)    // store E-cell value in alpha channel
+    }
+    Z.putImageData(l,0,0);          // update image
+    setTimeout(w,0)                 // start next frame
+};
+w()                                 // start simulation
+</script>

@@ -1,0 +1,14 @@
+<canvas><script>c=document.body.lastChild
+Z=c.getContext('2d')
+l=Z.getImageData(0,0,c.width=c.height=W=256,W)
+I=()=>Float32Array(N=W*W)
+w=()=>{K(t,b,1)
+K(g,t,W)
+K(t,f,1)
+K(h,t,W)
+for(i=N;i--;){B=(j)=>.7/(1+Math.exp(j+3+4*h[i]-5*g[i]-Math.random()))
+b[i]=B(6*h[i]-g[i])+b[i]*.3
+f[i]=B(1)*.13+f[i]*.91
+l.data[i*4+3]=b[i]*(W-1)}Z.putImageData(l,0,0)
+setTimeout(w,0)}
+w(g=I(h=I(f=I(b=I(t=I(K=(w,t,W)=>{for(i=T=N-1;i--;)w[i]=(t[i-W&T]+t[W+i&T]+3*t[i])/2.5}))))))</script>

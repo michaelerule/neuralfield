@@ -1,0 +1,1 @@
+$=(i)=>document.getElementById(i);

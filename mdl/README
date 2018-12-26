@@ -1,0 +1,181 @@
+Create a model description language that can be converted to GPU
+or CPU kernels in a variety of contexts.
+
+Platforms that we would like to support:
+
+OpenCL
+WebGL
+OpenGL
+
+The mathematical operations should be quite similar across these
+platforms. The "Language" can be nothing more than excerpts of C
+code with some regex macros to convert between platforms, and then
+embed the excerpts into the appropriate kernel templates.
+
+Avoid if at all possible symbolic manipulation, but if needed have
+the symbolic manipulation be separate form the parsing/compiling
+toolchain.
+
+In most GPU implementation spatial interactions are mediated by a
+linear spatial operator that is implemented in a separate kernel.
+It seems sufficient to require that the user specify a prefabricated
+lateral interaction model and some parameters.
+
+Details of numeric implementation differ enough between platforms that
+this information should be specified outside of the model description.
+E.g. we should assume that all variables are floats and let the
+platform implement the numerics as accurately as possible on the
+target platform.
+
+Although we are using forward Euler for integartion at the moment,
+other integration schemes may be supported later, and we should
+strive for a modular design that permits this. The model description
+should not specify integration scheme.
+
+The (2,3,4)-vector notation of GLSL, while convenient, won't exist
+in OpenCL implementations and should not be used in the model
+description language.
+
+Consider the following Wilson-Cowan implemented with 8-bit fixed
+point in WebGL
+
+<script id="wc_kernel-parameters" type="x-fragment-parameters">
+// Note: this is not Javascript and these values are not
+// directly accessible to either the main function or the wilson-
+// cowan kernel below. The parameters.js library must be used to
+// parse and handle this parameter list. This bridges some of the
+// issues with interfacing a weakly typed language like javascript
+// with the strong typing of WebGLSL.
+// Arrays passed to shader
+sampler2D Uin;
+sampler2D Uconv;
+sampler2D noise;
+// Parameters, may be compiled or passed as arguments
+float dt;  // Euler integrator time step
+float Te;  // Excitatory population time constant (ms)
+float Ti;  // Inhibitory population time constant (ms)
+float ai;  // Timescale of inhibitory adaptation
+float ae;  // Timescale of excitatory adaptation
+float Aee; // E-E coupling
+float Aie; // Excitation of Inhibitory coupling
+float Aei; // Inhibition of Excitatory coupling
+float Aii; // I-I coupling
+float He;  // Bias in E cell synaptic input
+float Hi;  // Bias in I cell synaptic input
+float Ne;  // Noise level (uniform) in E cells
+float Ni;  // Noise level (uniform) in I cells
+float bi;  // Strength of Inhibitory adaptation
+float be;  // Strength of Excitatory adaptation
+float Gi;  // Gain on stimulation of i cells
+float Ge;  // Gain on stimulation of e cells
+float s;   // External stimulation
+</script>
+<script id="wc_kernel" type="x-fragment">
+#define twopi 6.283185307179586
+#define F(x) (1./(1.+exp(-(x))))
+void main() {
+    vec2 XY   = gl_FragCoord.xy/vec2(W,H);
+    vec4 U    = texture2D(Uin  , XY); // raw fields
+    vec4 Uc   = texture2D(Uconv, XY); // convolved fields
+
+    vec4 n    = texture2D(noise, XY)*.999+0.0001; // uniform noise
+    vec2 R    = sqrt(-2.*log(n.xy));  // Transform uniform noise
+    vec2 T    = twopi*n.zw;           // into Gaussian using Box-
+    vec4 N    = vec4(R*cos(T),R*sin(T))*sqrt(dt); // Muller transform.
+
+    float Ae  = F(Aee*Uc.x-Aie*Uc.y-He+Ge*s-U.z*be+Ne*N.x);
+    float Ai  = F(Aei*Uc.x-Aii*Uc.y-Hi+Gi*s-U.w*bi+Ne*N.x);
+    float Ue  = U.x + (Ae -U.x)*(dt/Te);
+    float Ui  = U.y + (Ai -U.y)*(dt/Ti);
+    float Ve  = U.z + (U.x-U.z)*(dt/ae);
+    float Vi  = U.w + (U.y-U.w)*(dt/ai);
+    gl_FragColor = floor(255.*vec4(Ue,Ui,Ve,Vi)+.5)/255.;
+}
+</script>
+<script id="colormap" type="x-shader/x-fragment">
+uniform sampler2D Uin;
+void main() {
+    vec2  XY = gl_FragCoord.xy/vec2(W,H);
+    vec4  U  = texture2D(Uin   ,XY);
+    float Ue  = U.r;
+    float Ui  = U.g;
+    gl_FragColor = vec4(Ue,Ui,abs(Ue-Ui)*3.0,1.);
+}
+</script>
+
+
+A condensed summary, that also contains enough information to
+regenerate the parameter-surfing GUI intergface, would be
+
+field2d Ue, Ui, Ve, Vi
+
+pargroup Excitatory
+    par Aee; // E-E couplng
+    par Aie; // Excitation of Inhibitory coupling
+    par He;  // Bias in E cell synaptic input
+    par Te;  // Excitatory population time constant (ms)
+    par ae;  // Timescale of excitatory adaptation
+    par Ne;  // Noise level (uniform) in E cells
+    par Se;  // Width of excitatory spread
+    par be;  // Strength of Excitatory adaptation
+    par Ge;  // Gain on stimulation of e cells
+
+pargroup Inhibitory
+    par Ti;  // Inhibitory population time constant (ms)
+    par Aii; // I-I coupling
+    par Aei; // Inhibition of Excitatory coupling
+    par ai;  // Timescale of inhibitory adaptation
+    par Hi;  // Bias in I cell synaptic input
+    par Ni;  // Noise level (uniform) in I cells
+    par Si;  // Width of inhibitory spread
+    par bi;  // Strength of Inhibitory adaptation
+    par Gi;  // Gain on stimulation of i cells
+
+pargroup Stimulus
+    par f;
+    par A;
+
+let Ke = GAUSSIAN_KERNEL(Se)
+let Ki = GAUSSIAN_KERNEL(Si)
+let N  = GAUSSIAN_NOISE(0,1)
+
+var s = Heav(cos(f*t))*A // External stimulation
+fun F(x) = (1./(1.+exp(-(x))))
+
+var Ae = F(Aee*Ke[Ue]-Aie*Ki[Ui]-He+Ge*s-U.z*be+Ne*N);
+var Ai = F(Aei*Ke[Ui]-Aii*Ki[Ui]-Hi+Gi*s-U.w*bi+Ni*N);
+update dUe/dt = (Ae - Ue)/Te
+update dUi/dt = (Ai - Ui)/Ti
+update dVe/dt = (Ue - Ve)/ae
+update dVi/dt = (Ui - Vi)/ai
+
+display RGB = Ue,Ui,abs(Ue-Ui)*3.0,
+
+We should allow greek letters in the model description, automatically
+converted to the appropriate LaTeX in the display. Actually we should
+allow all unicode mathematical symbols.
+
+We can allow a single implementation of the parser. For example,
+we might build a model for WebGL, but there is no need to make
+the parser strictly in Javasript. Instead we can have a single
+program that has modules to target the various platforms.
+
+I'm not very good with writing parsers. In the interest of modularity
+we should keep things separate. For example, WebGL_kernel, etc, can
+be defined. mrule_model_description can be defined, but optional.
+Users may directly specify the kernel if desired. The parser that
+takes mrule_model_description to WebGL_kernel should be configurable
+so that users can insert their own languages, parsers, targets.
+
+For now let's choose a very easily parsed description language.
+
+The language will consist of lines.
+Each line is one statement.
+Each statement begins with a keyword.
+The keyword specifies which function to parse the line
+semicolons, and trailing and leading whitespace are ignored
+comments are supported by // or % or #
+
+
+
+
