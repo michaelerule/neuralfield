@@ -1,9 +1,0 @@
-<canvas><script>c=document.body.lastChild
-Z=c.getContext('2d')
-l=Z.getImageData(r=1,0,c.width=c.height=W=256,W)
-I=()=>Float32Array(N=W*W)
-w=()=>{K(t,b,1);K(g,t,W);K(t,f,1);K(h,t,W)
-for(i=N;i--;)B=(j)=>.7/(1+Math.exp(j+3+4*h[i]-5*g[i]-Math.random())),b[i]=B(6*h[i]-g[i])+b[i]*.3,f[i]=B(1)*.13+f[i]*.91,l.data[i*4+3]=b[i]*(W-1)
-r&&setTimeout(w,Z.putImageData(l,0,0))}
-c.onclick=(e)=>(r^=1)|w()
-w(h=I(g=I(f=I(b=I(t=I(K=(w,t,W)=>{for(i=N;i--;){w[i]=0;for(j=3;j--;)w[i]+=(j*4+2&7)/5*t[W*j-W+i&N-1]}}))))))</script>
