@@ -433,7 +433,6 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
 <script type="text/javascript">
 
 presets=[
-['Forest_Fire_0','randomize','Aii=3;Aie=18;Ti=5.8;Hi=5.5;Gi=0;Si=0.4;Ni=0;ai=2.7;bi=7.6;Aee=11.1;Aei=5.3;Te=2;He=3.1;Ge=0;Se=0.5;Ne=0.1;ae=1000;gammae=2;be=0.5;dt=2;Amp=11;f=0;'],
 ['Forest_Fire_I','randomize','Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;'],
 ['Forest_Fire_II','randomize','Aii=1;Aie=15.8;Ti=13;Hi=5.9;Gi=0;Si=0;Ni=0.1;ai=2;bi=7;Aee=9.8;Aei=5;Te=2;He=2.9;Ge=0;Se=0.6;Ne=0.2;ae=1000;gammae=2;be=1;dt=1.7;Amp=11;f=0;'],
 ['flicker','randomize','dt=1.0;Te=10.0;Ti=20.0;Aei=8.5;Aii=3.0;Aee=10.5;Aie=12.0;Hi=3.5;He=2.0;Ni=0.0;Ne=0.0;Gi=0.0;Ge=1.0;bi=0.0;be=0.0;Amp=0.6;f=6.8;Se=1;Si=2;ai=1;ae=1;'],
