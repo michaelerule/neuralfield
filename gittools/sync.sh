@@ -11,13 +11,20 @@
 #
 
 
-rmbak
-rmtex
+#rmbak
+#rmtex
 
 echo "Generating static file browsing links"
 # Generate github pages browsing links
 # (stopgap until official documentation is prepared)
-./Gittools/maketree.py
+./gittools/maketree.py
+
+# Clean up editor and temp files from the local directory (even if not 
+# tracked by git)
+#echo "Deleting editor temporary files"
+#find . -name "*.pyc" -exec rm -rf {} \; 2>/dev/null
+#find . -name "*~" -exec rm -rf {} \;  2>/dev/null
+
 
 # Clean up editor and temp files from the local directory (even if not 
 # tracked by git)
@@ -25,10 +32,20 @@ echo "Deleting editor temporary files"
 find . -name "*.pyc" -exec rm -rf {} \; 2>/dev/null
 find . -name "*~" -exec rm -rf {} \;  2>/dev/null
 
-shopt -s extglob
-./go
-git add *
-git rm -r !(.*)
+# Add any new files, add all updates to all files
+
+echo "Adding all changes"
+git add --all . 
 git add -u :/
+
+# Commit using the message specified as first argument to this script
+
+echo "Git commit"
 git commit -m "$1"
-git push -f origin master
+
+# Synchronize with master on github
+echo "git pull"
+git pull
+
+echo "git push"
+git push origin master
