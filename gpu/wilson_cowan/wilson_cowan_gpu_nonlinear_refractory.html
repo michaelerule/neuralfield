@@ -116,6 +116,7 @@ float gammae;
 #define twopi 6.283185307179586
 #define F(x) (1./(1.+exp(-(x))))
 vec2 EncodeFloatXY( float v ) {
+  v = clamp(v,0.,1.);
   v -= 0.00000762951;
   vec2 enc = vec2(1.0, 255.0) * v;
   enc = fract(enc);
