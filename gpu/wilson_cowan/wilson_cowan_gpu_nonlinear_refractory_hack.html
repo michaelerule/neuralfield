@@ -92,14 +92,16 @@ void main() {
     float Ve = DecodeFloatXY(V.xy);
     float Vi = DecodeFloatXY(V.zw);
 
+    // Screw this up: I field needs to actually be more blurred E field
     float Ae  = F(Aee*Ce-Aei*Ci-He+Ge*s-Ve*be+Ne*N.x);
     float Ai  = F(Aie*Ce-Aii*Ci-Hi+Gi*s-Vi*bi+Ni*N.y);
     float Ue_out  = Ue + (Ae - Ue)*(dt/Te);
     float Ui_out  = Ui + (Ai - Ui)*(dt/Ti);
 
+    // Delete I field :P
     gl_FragColor = vec4(
         EncodeFloatXY(Ue_out),
-        EncodeFloatXY(Ui_out));
+        EncodeFloatXY(Ue_out));
 }
 </script>
 
@@ -451,8 +453,7 @@ presets=[
 ['Beautiful_Chaos','randomize','Aii=6;Aie=14.3;Ti=50;Hi=4.7;Gi=0;Si=0.1;Ni=0.1;ai=1;bi=0;Aee=8.6;Aei=11.3;Te=3.2;He=2.3;Ge=1;Se=0.8;Ne=0.1;ae=1;gammae=100;be=0;dt=1;Amp=0;f=6.8;'],
 ['Periodic_and_Homoclinic','randomize','Aii=7.3;Aie=21.3;Ti=10;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.2;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.1;Amp=0;f=6.8;'],
 ['Periodic_and_Homoclinic_II','randomize','Aii=7.3;Aie=21.3;Ti=8;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.1;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.5;Amp=0;f=6.8;'],
-['Blink','randomize','Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;'],
-['Pretty','randomize','Aii=0;Aie=3.3;Ti=1.9;Hi=1.7;Gi=0;Si=0.9;Ni=0;ai=9;bi=0;Aee=8.9;Aei=5.7;Te=1;He=1.4;Ge=0;Se=0.8;Ne=0.1;ae=20;gammae=1;be=0.9;dt=0.1;Amp=8.6;f=6.5;']
+['Blink','randomize','Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;']
 ]
 
 function main() {

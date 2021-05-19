@@ -10,7 +10,7 @@
 <script src="../lib/parameters.js"></script>
 <link rel="stylesheet" type="text/css" href="wc.css">
 <link rel="stylesheet" type="text/css" href="wcv2.css">
-<title>Wilson-Cowan on the GPU and in your browser</title>
+<title>One population Amari-type neural field in the browser</title>
 
 <!-- import the MathJax scripts -->
 <script type="text/x-mathjax-config">
@@ -42,26 +42,17 @@ sampler2D Uconv;
 sampler2D noise;
 float dt;  // Euler integrator time step
 float Te;  // Excitatory population time constant (ms)
-float Ti;  // Inhibitory population time constant (ms)
-float Aee; // E-E coupling
-float Aie; // Excitation of Inhibitory coupling
-float Aei; // Inhibition of Excitatory coupling
-float Aii; // I-I coupling
+float Ae;  // E coupling
+float Ai;  // I coupling
+float Ne;  // E cell noise levels
 float He;  // Bias in E cell synaptic input
-float Hi;  // Bias in I cell synaptic input
-float bi;  // Strength of Inhibitory adaptation
-float be;  // Strength of Excitatory adaptation
-float Ne;  // Noise level (uniform) in E cells
-float Ni;  // Noise level (uniform) in I cells
-float Gi;  // Gain on stimulation of i cells
-float Ge;  // Gain on stimulation of e cells
-float s;   // External stimulation
 </script>
 <script id="wc_kernel" type="x-fragment">
 #define twopi 6.283185307179586
 #define F(x) (1./(1.+exp(-(x))))
 vec2 EncodeFloatXY( float v ) {
-  // Fixed point float encoding ranges in (0,1)
+  // Encodes a float in [0,1] in terms of a 2D (x,y) vector type
+  // This should approximate 16-bit fixed point encoding
   v        = clamp(v,0.0,1.0);
   v       -= 0.00000762951; //predictable rounding
   vec2 enc = vec2(1.0, 255.0) * v;
@@ -73,79 +64,32 @@ float DecodeFloatXY( vec2 xy ) {
   return dot( xy, vec2(1.,1./255.) );
 }
 void main() {
-    vec2 XY   = gl_FragCoord.xy/vec2(W,H);
-    vec4 U    = texture2D(Uin  , XY); // raw fields
-    vec4 V    = texture2D(Vin  , XY); // adaptation fields
-    vec4 Uc   = texture2D(Uconv, XY); // convolved fields
+    vec2 XY   = gl_FragCoord.xy/vec2(W,H); // where are we in 2D space?
+    //vec4 V    = texture2D(Vin  , XY);      // adaptation variables
+    vec4 U    = texture2D(Uin  , XY);      // raw fields
+    vec4 Uc   = texture2D(Uconv, XY);      // convolved fields
 
-    vec4 n    = texture2D(noise, XY)*0.999+0.0001; // uniform noise
-    vec2 R    = sqrt(-2.*log(n.xy));  // Transform uniform noise
-    vec2 T    = twopi*n.zw;           // into Gaussian using Box-
-    vec4 N    = vec4(R*cos(T),R*sin(T))*sqrt(dt); // Muller transform.
+    // Get uniform random noise from a texture argument, then transform it
+    // into a pair of Gaussian noise variables using Box-Muller transform.
+    vec4 n    = texture2D(noise, XY)*0.999+0.0001;
+    vec2 R    = sqrt(-2.*log(n.xy));
+    vec2 T    = twopi*n.zw;
+    vec4 N    = vec4(R*cos(T),R*sin(T))*sqrt(dt);
 
     // Unpack state from texture information
     // using two channels per float (16 bit fixed point)
+    // We've disabled the I cell population here
     float Ce = DecodeFloatXY(Uc.xy);
     float Ci = DecodeFloatXY(Uc.zw);
     float Ue = DecodeFloatXY(U.xy);
-    float Ui = DecodeFloatXY(U.zw);
-    float Ve = DecodeFloatXY(V.xy);
-    float Vi = DecodeFloatXY(V.zw);
+    //float Ve = DecodeFloatXY(V.xy);
 
-    float Ae  = F(Aee*Ce-Aei*Ci-He+Ge*s-Ve*be+Ne*N.x);
-    float Ai  = F(Aie*Ce-Aii*Ci-Hi+Gi*s-Vi*bi+Ni*N.y);
-    float Ue_out  = Ue + (Ae - Ue)*(dt/Te);
-    float Ui_out  = Ui + (Ai - Ui)*(dt/Ti);
+    float Xe = F(Ae*Ce-Ai*Ci-He+Ne*N.x);
+    float Ue_out = Ue + (Xe - Ue)*(dt/Te);
 
-    gl_FragColor = vec4(
-        EncodeFloatXY(Ue_out),
-        EncodeFloatXY(Ui_out));
+    gl_FragColor = vec4(EncodeFloatXY(Ue_out),EncodeFloatXY(Ue_out));
 }
 </script>
-
-
-<script id="adapt_kernel-parameters" type="x-fragment-parameters">
-sampler2D Uin;
-sampler2D Vin;
-float dt;  // Euler integrator time step
-float ai;  // Timescale of inhibitory adaptation
-float ae;  // Timescale of excitatory adaptation
-float gammae;
-</script>
-<script id="adapt_kernel" type="x-fragment">
-#define twopi 6.283185307179586
-#define F(x) (1./(1.+exp(-(x))))
-vec2 EncodeFloatXY( float v ) {
-  v = clamp(v,0.,1.);
-  v -= 0.00000762951;
-  vec2 enc = vec2(1.0, 255.0) * v;
-  enc = fract(enc);
-  enc.x -= enc.y/255.0;
-  return enc;
-}
-float DecodeFloatXY( vec2 xy ) {
-  return dot( xy, vec2(1.,1./255.) );
-}
-void main() {
-    vec2 XY   = gl_FragCoord.xy/vec2(W,H);
-    vec4 U    = texture2D(Uin  , XY); // raw fields
-    vec4 V    = texture2D(Vin  , XY); // adaptation fields
-    float Ue_in = DecodeFloatXY(U.xy);
-    float Ui_in = DecodeFloatXY(U.zw);
-    float Ve_in = DecodeFloatXY(V.xy);
-    float Vi_in = DecodeFloatXY(V.zw);
-    float dVe = (Ue_in - Ve_in);
-    float Ve  = 
-        Ue_in > Ve_in 
-            ? Ve_in + dVe*(dt/gammae)
-            : Ve_in + dVe*(dt/ae);
-    float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
-    gl_FragColor = vec4(
-        EncodeFloatXY(Ve),
-        EncodeFloatXY(Vi));
-}
-</script>
-
 
 <script id="histogram" type="x-shader/x-fragment">
 uniform sampler2D Uin;
@@ -176,34 +120,21 @@ void main() {
 sampler2D Uin;
 sampler2D Vin;
 sampler2D hist;
-float Aee; // E-E coupling
-float Aie; // Excitation of Inhibitory coupling
-float Aei; // Inhibition of Excitatory coupling
-float Aii; // I-I coupling
+float Ae;  // E-E coupling
+float Ai;  // I-I coupling
 float He;  // Bias in E cell synaptic input
-float Hi;  // Bias in I cell synaptic input
-float bi;  // Strength of Inhibitory adaptation
-float be;  // Strength of Excitatory adaptation
 </script>
 <script id="colormap" type="x-shader/x-fragment">
 #define F(x) (1./(1.+exp(-(x))))
-float DecodeFloatXY( vec2 xy ) {
-  return dot( xy, vec2(1.,1./255.) );
-}
+float DecodeFloatXY( vec2 xy ) {return dot(xy,vec2(1.,1./255.));}
 vec2 dU_steady_state(vec2 u) {
-    return vec2(
-        F((Aee-be)*u.x-Aei*u.y-He)-u.x,
-        F(Aie*u.x-(bi+Aii)*u.y-Hi)-u.y);
+    return vec2(0.0,0.0);
 }
 vec2 dU_no_adaptation(vec2 u) {
-    return vec2(
-        F((Aee)*u.x-Aei*u.y-He)-u.x,
-        F(Aie*u.x-(Aii)*u.y-Hi)-u.y);
+    return vec2(0.0,0.0);
 }
 vec2 dU_full_adaptation(vec2 u) {
-    return vec2(
-        F((Aee)*u.x-be-Aei*u.y-He)-u.x,
-        F(Aie*u.x-bi-Aii*u.y-Hi)-u.y);
+    return vec2(0.0,0.0);
 }
 #define PADFACTOR 1.2
 void main() {
@@ -272,66 +203,27 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
     <div class="controlbox" style="font-size:85%;position:relative;">
         <div style="clear:both;display:block">
             <div class="controls">
-                Inhibitory
-                <div class="control">$a_{ii}$
-                    <input type="number" step="0.1" max="100" min="0"    name="Aii" value="3.0"/>
-                </div>
-                <div class="control">$a_{ie}$
-                    <input type="number" step="0.1" max="100" min="0"    name="Aie" value="12.0"/>
-                </div>
-                <div class="control">$\tau_i$
-                    <input type="number" step="0.1" max="100" min="0"    name="Ti"  value="20.0"/>
-                </div>
-                <div class="control">$\theta_i$
-                    <input type="number" step="0.1" max="100" min="-100" name="Hi"  value="3.5"/>
-                </div>
-                <div class="control">$g_i$
-                    <input type="number" step="0.1" max="100" min="-100" name="Gi"  value="0.0"/>
-                </div>
-                <div class="control">$\sigma_i$
-                    <input type="number" step="0.1" max="100" min="0"    name="Si"  value="1.5"/>
-                </div>
-                <div class="control">$N_i$
-                    <input type="number" step="0.1" max="100" min="0"    name="Ni"  value="0.1"/>
-                </div>
-                <div class="control">$\alpha_i$
-                    <input type="number" step="0.1" max="1000" min="0"    name="ai"  value="5.0"/>
-                </div>
-                <div class="control">$\beta_i$
-                    <input type="number" step="0.1" max="100"  min="-100" name="bi"  value="0.0"/>
-                </div>
-            </div>
-            <div class="controls">
                 Excitatory
-                <div class="control">$a_{ee}$
-                    <input type="number" step="0.1" max="100" min="0"    name="Aee" value="10.0"/>
+                <div class="control">$a_{e}$
+                    <input type="number" step="0.1" max="100" min="0"    name="Ae" value="0.0"/>
                 </div>
-                <div class="control">$a_{ei}$
-                    <input type="number" step="0.1" max="100" min="0"    name="Aei" value="8.5"/>
+                <div class="control">$a_{i}$
+                    <input type="number" step="0.1" max="100" min="0"    name="Ai" value="0.0"/>
                 </div>
                 <div class="control">$\tau_e$
-                    <input type="number" step="0.1" max="100" min="0"    name="Te"  value="10.0"/>
+                    <input type="number" step="0.1" max="100" min="0"    name="Te"  value="1.0"/>
                 </div>
                 <div class="control">$\theta_e$
-                    <input type="number" step="0.1" max="100" min="-100" name="He"  value="2.0"/>
-                </div>
-                <div class="control">$g_e$
-                    <input type="number" step="0.1" max="100" min="-100" name="Ge"  value="0.8"/>
+                    <input type="number" step="0.1" max="100" min="-100" name="He"  value="1.0"/>
                 </div>
                 <div class="control">$\sigma_e$
-                    <input type="number" step="0.1" max="100" min="0"    name="Se"  value="0.6"/>
+                    <input type="number" step="0.1" max="100" min="0"    name="Se"  value="1.0"/>
+                </div>
+                <div class="control">$\sigma_i$
+                    <input type="number" step="0.1" max="100" min="0"    name="Si"  value="3.0"/>
                 </div>
                 <div class="control">$N_e$
                     <input type="number" step="0.1" max="100" min="0"    name="Ne"  value="0.1"/>
-                </div>
-                <div class="control">$\alpha_e$
-                    <input type="number" step="0.1" max="1000" min="0"    name="ae"  value="5.0"/>
-                </div>
-                <div class="control">$\gamma_e$
-                    <input type="number" step="0.1" max="1000" min="0"    name="gammae"  value="5.0"/>
-                </div>
-                <div class="control">$\beta_e$
-                    <input type="number" step="0.1" max="100"  min="-100" name="be"  value="0.0"/>
                 </div>
             </div>
         </div>
@@ -341,15 +233,6 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
                 Time stepping
                 <div class="control">$\Delta t$
                     <input type="number" step="0.1" max="100"  min="0"    name="dt"  value="2.0"/>
-                </div>
-            </div>
-            <div class="controls">
-                Stimulus
-                <div class="control">$A$
-                    <input type="number" step="0.1" max="100"  min="-100" name="Amp" value="0.5"/>
-                </div>
-                <div class="control">$f$
-                    <input type="number" step="0.1" max="1000" min="0"    name="f"   value="50.0"/>
                 </div>
             </div>
         </div>
@@ -384,16 +267,11 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
     <!-- title for plot on bottom right -->
     <div style='position:absolute;bottom:-276px;left:456px;width:256px;height:15px;z-index:2;line-height:15px;text-align:center;font-size:70%;'>E/I trajectories in phase space</br>With, without adaptation</div>
     
-
-
     <div id='canvasoverlay' style="position:absolute; left:200px; z-index: 2;">
         <div style="display: table-cell; vertical-align: middle;">
         Click to start
         </div>
     </div>
-
-
-
 
     </div>
 
@@ -418,10 +296,7 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
         </div>
     </div>
     <div id="equation">
-    \[\textrm{E-cells:  } \tau_e \dot{U_e} = -U_e + f( a_{ee}  \cdot K_e \star U_e - a_{ie}  \cdot K_i \star U_i - \theta_e + g_e S(t) - \beta_e V_e)\]
-    \[\textrm{I-cells:  } \tau_i \dot{U_i} = -U_i + f( a_{ei}  \cdot K_e \star U_e - a_{ii}  \cdot K_i \star U_i - \theta_i + g_i S(t) - \beta_i V_i )\]
-    \[\textrm{E-cell adaptation:  } \tau_{ve} \dot{V_e} = U_e - V_e,\,\, \tau_{ve} = \begin{cases} \alpha_e & \text{if }V_e< U_e \\ \gamma_e & \text{if }V_e\ge U_e\end{cases} \]
-    \[\textrm{I-cell adaptation:  } \alpha_i \dot{V_i} = U_i - V_i \]
+    \[\textrm{E-cells:  } \tau_e \dot{U_e} = -U_e + f( a_{ee}  \cdot K_e \star U_e - a_{ie}  \cdot K_i \star U_e - \theta_e)\]
     \[\textrm{Interaction kernel (normalized to 1):  } K_{e,i}(x,y) \propto \exp\left(\frac{1}{2} \frac{x^2}{\sigma_{x\,e,i}^2}+\frac{1}{2} \frac{y^2}{\sigma_{y\,e,i}^2}\right)\]
     </div>
 </div>
@@ -434,25 +309,7 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
 <script type="text/javascript">
 
 presets=[
-['Forest_Fire_0','randomize','Aii=3;Aie=18;Ti=5.8;Hi=5.5;Gi=0;Si=0.4;Ni=0;ai=2.7;bi=7.6;Aee=11.1;Aei=5.3;Te=2;He=3.1;Ge=0;Se=0.5;Ne=0.1;ae=1000;gammae=2;be=0.5;dt=2;Amp=11;f=0;'],
-['Forest_Fire_I','randomize','Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;'],
-['Forest_Fire_II','randomize','Aii=1;Aie=15.8;Ti=13;Hi=5.9;Gi=0;Si=0;Ni=0.1;ai=2;bi=7;Aee=9.8;Aei=5;Te=2;He=2.9;Ge=0;Se=0.6;Ne=0.2;ae=1000;gammae=2;be=1;dt=1.7;Amp=11;f=0;'],
-['flicker','randomize','dt=1.0;Te=10.0;Ti=20.0;Aei=8.5;Aii=3.0;Aee=10.5;Aie=12.0;Hi=3.5;He=2.0;Ni=0.0;Ne=0.0;Gi=0.0;Ge=1.0;bi=0.0;be=0.0;Amp=0.6;f=6.8;Se=1;Si=2;ai=1;ae=1;'],
-['Psychedelic','randomize','Aii=13;Aei=14.5;Ti=12.5;Hi=3.5;Gi=0;Si=2.9;Ni=0;ai=100;bi=0;Aee=16.1;Aie=13.7;Te=4;He=3.1;Ge=0;Se=2;Ne=.75;ae=50;be=0;dt=1;Amp=0;f=0;'],
-['Rare_Waves','randomize','Aii=13;Aie=14.5;Ti=13;Hi=3.5;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=17.2;Aei=13.7;Te=4;He=3.1;Ge=0;Se=3;Ne=1;ae=50;be=1.3;dt=1;Amp=0;f=0;'],
-['Oscillators','randomize','Aii=0;Aie=5;Ti=20;Hi=2.5;Gi=0;Si=1;Ni=0.5;ai=100;bi=0;Aee=8;Aei=5;Te=10;He=1;Ge=10;Se=1;Ne=0.5;ae=100;be=1;dt=1;Amp=0;f=6.8;'],
-['Chaos','randomize','Aii=11.7;Aie=20;Ti=36;Hi=4.4;Gi=0.3;Si=1;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Se=3;Ne=.1;ae=50;be=1;dt=1;Amp=0;f=6.8;'],
-['Prickles','randomize','Aii=11.7;Aie=20;Ti=80;Hi=0.6;Gi=0.3;Si=5;Ni=0;ai=12;bi=0;Aee=15.5;Aei=10;Te=5;He=2.2;Ge=0.6;Se=1;Ne=1;ae=4;be=1.4;dt=1;Amp=0;f=6.8;'],
-['Goldfish','randomize','Aii=11.7;Aie=20;Ti=80;Hi=0.6;Gi=0.3;Si=5;Ni=0;ai=12;bi=0;Aee=15.5;Aei=10;Te=5;He=2.2;Ge=0.6;Se=1;Ne=1;ae=140;be=2.8;dt=1.4;Amp=0;f=6.8;'],
-['Canard Chaos','randomize','Aii=0;Aie=20;Ti=20;Hi=3.7;Gi=0.3;Si=0.7;Ni=0;ai=12;bi=0.6;Aee=14.1;Aei=10;Te=5;He=1.8;Ge=0.6;Se=0.7;Ne=.1;ae=100;be=0.5;dt=1;Amp=0;f=6.8;'],
-['Oscillate','randomize','Aii=0;Aie=2.74;Ti=1.9;Hi=1.2;Gi=0;Si=.1;Ni=0;ai=9;bi=0;Aee=8;Aei=5.1;Te=1;He=0.1;Ge=0;Se=2;Ne=0.2;ae=200;be=2.2;dt=1;Amp=0;f=6.8;'],
-['Mycelium','randomize','Aii=0;Aie=5;Ti=4;Hi=2.1;Gi=0.3;Si=2.6;Ni=0;ai=12;bi=1.1;Aee=12.6;Aei=9.6;Te=1;He=1.7;Ge=0.6;Se=.8;Ne=0.4;ae=1000;gammae=50;be=4.5;dt=1;Amp=0;f=6.8;'],
-['?','randomize','Aii=0;Aie=5;Ti=4;Hi=2.1;Gi=0.3;Si=2.6;Ni=0;ai=12;bi=1.1;Aee=12.6;Aei=9.6;Te=1;He=1.7;Ge=0.6;Se=.8;Ne=0.4;ae=1000;gammae=50;be=5.5;dt=1;Amp=0.3;f=50;'],
-['Beautiful_Chaos','randomize','Aii=6;Aie=14.3;Ti=50;Hi=4.7;Gi=0;Si=0.1;Ni=0.1;ai=1;bi=0;Aee=8.6;Aei=11.3;Te=3.2;He=2.3;Ge=1;Se=0.8;Ne=0.1;ae=1;gammae=100;be=0;dt=1;Amp=0;f=6.8;'],
-['Periodic_and_Homoclinic','randomize','Aii=7.3;Aie=21.3;Ti=10;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.2;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.1;Amp=0;f=6.8;'],
-['Periodic_and_Homoclinic_II','randomize','Aii=7.3;Aie=21.3;Ti=8;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.1;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.5;Amp=0;f=6.8;'],
-['Blink','randomize','Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;'],
-['Pretty','randomize','Aii=0;Aie=3.3;Ti=1.9;Hi=1.7;Gi=0;Si=0.9;Ni=0;ai=9;bi=0;Aee=8.9;Aei=5.7;Te=1;He=1.4;Ge=0;Se=0.8;Ne=0.1;ae=20;gammae=1;be=0.9;dt=0.1;Amp=8.6;f=6.5;']
+['Dummy','randomize','Ai=0;Ae=0;Te=10;He=3;Se=1;Se=3;Ne=0.1;dt=0.5'],
 ]
 
 function main() {
@@ -474,54 +331,37 @@ function main() {
 
     var gl = getRasterGL(canvas);
 
-    var dt  = null;   // Euler integrator time step
-    var Te  = null;   // Excitatory population time constant (ms)
-    var Ti  = null;   // Inhibitory population time constant (ms)
-    var Se  = null;   // Excitatory population spread
-    var Si  = null;   // Inhibitory population spread
-    var Aee = null;  // E-E coupling Aeight
-    var Aie = null;  // Excitation of Inhibitory coupling Aeight
-    var Aei = null;  // Inhibition of Excitatory coupling Aeight
-    var Aii = null;  // I-I coupling Aeight
-    var He  = null;   // Bias in E cell synaptic input
-    var Hi  = null;   // Bias in I cell synaptic input
-    var Ne  = null;   // Noise level (uniform) in E cells
-    var Ni  = null;   // Noise level (uniform) in I cells
-    var f   = null;    // Stim frequency Hz
-    var Ge  = null;   // Input drive to E cells
-    var Amp = null;  // Amplitude of stimulus
-    var Gi  = null;   // Input drive to I cells
-    var St  = null;   // Sinusoidal input stimulus is thresholded
-    var ai  = null;   // Timescale of inhibitory adaptation
-    var ae  = null;   // Timescale of excitatory adaptation
-    var gammae = 100.;   // Timescale of excitatory adaptation activation
-    var bi  = null;   // Strength of Inhibitory adaptation
-    var be  = null;   // Strength of Excitatotu adaptation
+    var dt  = null; // Euler integrator time step
+    var Te  = null; // Excitatory population time constant (ms)
+    var Se  = null; // Excitatory population spread
+    var Si  = null; // Inhibitory population spread
+    var Ae  = null; // E-E coupling Aeight
+    var Ai  = null; // Excitation of Inhibitory coupling Aeight
+    var He  = null; // Bias in E cell synaptic input
+    var Ne  = null; // Noise level (uniform) in E cells
     
     var Str = 0.5;
 
     var running = 0;
 
-    // Simulus
-    function heav(z) {return z<.0?.0:z==.0?.5:1.;}
-    function Stim(t) {return heav(Math.sin(2*Math.PI*t*f/1000.)-Str)*Amp;}
-
     // bit of a hack
-    gl.width = gl.height = 256;
+    var SIZE = 256;
+    gl.width = gl.height = SIZE;
 
-    var temp1  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var temp2  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var U      = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var V      = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var UC     = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var noise  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var hist   = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
+    var temp1  = newBasicFramebuffer(gl,{wrap:gl.REPEAT, size:SIZE});
+    var temp2  = newBasicFramebuffer(gl,{wrap:gl.REPEAT, size:SIZE});
+    var U      = newBasicFramebuffer(gl,{wrap:gl.REPEAT, size:SIZE});
+    var V      = newBasicFramebuffer(gl,{wrap:gl.REPEAT, size:SIZE});
+    var UC     = newBasicFramebuffer(gl,{wrap:gl.REPEAT, size:SIZE});
+    var noise  = newBasicFramebuffer(gl,{wrap:gl.REPEAT, size:SIZE});
+    var hist   = newBasicFramebuffer(gl,{wrap:gl.REPEAT, size:SIZE});
     var dohist = getRasterProgram(gl,'histogram');
     var hblur  = GPUGaussianBlur(gl,5.0);
-    var copy   = GPUcopy(gl,256,256);
+    var copy   = GPUcopy(gl,SIZE,SIZE);
     var blur   = GPUGaussianMultiBlur16(gl,0.5);
     var gpurng = GPUNoise(gl);
     var rand   = WeakRNG();
+    
     // compiled later after initialization
     var wc_kernel; 
     var adapt_kernel;
@@ -544,48 +384,22 @@ function main() {
             get_parameters('wc_kernel-parameters'), {
             dt : dt,  // Euler integrator time step
             Te : Te,  // Excitatory population time constant (ms)
-            Ti : Ti,  // Inhibitory population time constant (ms)
-            Aee: Aee, // E-E coupling
-            Aie: Aie, // Excitation of Inhibitory coupling
-            Aei: Aei, // Inhibition of Excitatory coupling
-            Aii: Aii, // I-I coupling
+            Ae : Ae,  // E coupling
+            Ai : Ai,  // I coupling
             He : He,  // Bias in E cell synaptic input
-            Hi : Hi,  // Bias in I cell synaptic input
-            bi : bi,  // Strength of Inhibitory adaptation
-            be : be,  // Strength of Excitatory adaptation
-            Ge : Ge,  // Simulation gain for e cells
-            Gi : Gi,  // Simulation gain for i cells
             Ne : Ne,  // Noise level (uniform) in E cells
-            Ni : Ni,  // Noise level (uniform) in I cells
         })[0];
         wc_kernel = buildRasterProgram(gl,
             wc_header+$('wc_kernel').text);
-
-        var adapt_header = compile_bind(
-            get_parameters('adapt_kernel-parameters'), {
-            dt : dt,  // Euler integrator time step
-            ai : ai,  // Timescale of inhibitory adaptation
-            ae : ae,  // Timescale of excitatory adaptation
-            gammae : gammae, // Adaptation process activation timescale
-        })[0];
-        adapt_kernel = buildRasterProgram(gl,
-            adapt_header+$('adapt_kernel').text);
-
+        
         var color_header = compile_bind(
             get_parameters('colormap-parameters'), {
-            Aee: Aee, // E-E coupling
-            Aie: Aie, // Excitation of Inhibitory coupling
-            Aei: Aei, // Inhibition of Excitatory coupling
-            Aii: Aii, // I-I coupling
+            Ae : Ae,  // E coupling
+            Ai : Ai,  // I coupling
             He : He,  // Bias in E cell synaptic input
-            Hi : Hi,  // Bias in I cell synaptic input
-            bi : bi,  // Strength of Inhibitory adaptation
-            be : be,  // Strength of Excitatory adaptation
         })[0];
-        color = buildRasterProgram(gl,
-            color_header+$('colormap').text);
-
-        blur = GPUGaussianMultiBlur16(gl,Se,Si);
+        color = buildRasterProgram(gl,color_header+$('colormap').text);
+        blur  = GPUGaussianMultiBlur16(gl,Se,Si);
     }
 
     function nothing()   {}
@@ -700,26 +514,18 @@ function main() {
         try {
             gpurng(noise,temp1);
             blur(U,temp1,UC);
-            var s = Stim(timestep*dt);
             wc_kernel({
                 Uin   :U,
                 Vin   :V,
                 Uconv :UC,
                 noise :noise,
-                s     :s,
                 },temp1);
-            adapt_kernel({
-                Uin   :U,
-                Vin   :V
-                },temp2);
+            //adapt_kernel({Uin:U,Vin:V},temp2);
             copy(temp1,U);
             copy(temp2,V);
             dohist({Uin:U},temp1);
             hblur(temp1,temp2,temp1);
-            color({
-                hist  :temp1,
-                Uin   :U,
-                Vin   :V});
+            color({hist:temp1,Uin:U,Vin:V});
             timestep += 1;
         } catch (err) {
             console.log(err.message);
