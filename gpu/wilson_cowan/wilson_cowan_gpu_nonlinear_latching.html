@@ -138,19 +138,20 @@ void main() {
     float Ve_in = DecodeFloatXY(V.xy);
     float Vi_in = DecodeFloatXY(V.zw);
     float dVe = (Ue_in - Ve_in);
-    //float Ve  = 
-    //    Ue_in > Ve_in 
-    //        ? Ve_in + dVe*(dt/gammae)
-    //        : Ve_in + dVe*(dt/ae);
-    //float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
+    
+    float Ve  = 
+        Ue_in > Ve_in 
+            ? Ve_in + dVe*(dt/gammae)
+            : Ve_in + dVe*(dt/ae);
+    float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
     
     // tau * V = - V + a * U * (1-V)
     // tau * V = - V - a * U * V + a * U
     // tau * V = a * U - (1 + a*U) * V
     
-    float Ve  = 
-            : Ve_in + dVe*(dt/ae);
-    float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
+    //float Ve  = 
+    //        : Ve_in + dVe*(dt/ae);
+    //float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
     
     gl_FragColor = vec4(
         EncodeFloatXY(Ve),

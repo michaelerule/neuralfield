@@ -12,8 +12,17 @@ function compileAndBindShader(gl,program,source,type){
     gl.shaderSource(shader,source);
     gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        var numbered_source = "";
+        var lines  = source.split("\n");
+        var nlines = lines.length;
+        var digits = Math.floor(Math.log10(nlines))+1;
+        for (var i=0; i<nlines; i++) {
+            var number = (i+1)+"";
+            var number = number.padStart(digits,'0');
+            numbered_source += number+" "+lines[i]+"\n";
+        }
         alert(gl.getShaderInfoLog(shader) + '\n\n' +
-              "Error compiling shader:\n" + source );
+              "Error compiling shader:\n" + numbered_source );
         return null;
     }
     gl.attachShader(program,shader);
