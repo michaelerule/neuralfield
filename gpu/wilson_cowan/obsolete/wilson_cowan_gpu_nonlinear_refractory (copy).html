@@ -8,7 +8,7 @@
 <script src="../lib/gpugaussian.js"></script>
 <script src="../lib/gpurand.js"></script>
 <script src="../lib/parameters.js"></script>
-<link rel="stylesheet" type="text/css" href="wc.css">
+<link rel="stylesheet" type="text/css" href="wc512.css">
 <link rel="stylesheet" type="text/css" href="wcv2.css">
 <title>Wilson-Cowan on the GPU and in your browser</title>
 
@@ -57,11 +57,7 @@ float Gi;  // Gain on stimulation of i cells
 float Ge;  // Gain on stimulation of e cells
 float s;   // External stimulation
 </script>
-
 <script id="wc_kernel" type="x-fragment">
-// Updates the E and I fields
-// ( due to shader limitations, V fields are handled in a separate shader,
-// below )
 #define twopi 6.283185307179586
 #define F(x) (1./(1.+exp(-(x))))
 vec2 EncodeFloatXY( float v ) {
@@ -102,13 +98,13 @@ void main() {
     float Ui_out  = Ui + (Ai - Ui)*(dt/Ti);
 
     gl_FragColor = vec4(
-        EncodeFloatXY(Ue_out)
+        EncodeFloatXY(Ue_out),
         EncodeFloatXY(Ui_out));
 }
 </script>
 
+
 <script id="adapt_kernel-parameters" type="x-fragment-parameters">
-// This updates the adaptation fields
 sampler2D Uin;
 sampler2D Vin;
 float dt;  // Euler integrator time step
@@ -120,6 +116,7 @@ float gammae;
 #define twopi 6.283185307179586
 #define F(x) (1./(1.+exp(-(x))))
 vec2 EncodeFloatXY( float v ) {
+  v = clamp(v,0.,1.);
   v -= 0.00000762951;
   vec2 enc = vec2(1.0, 255.0) * v;
   enc = fract(enc);
@@ -138,21 +135,11 @@ void main() {
     float Ve_in = DecodeFloatXY(V.xy);
     float Vi_in = DecodeFloatXY(V.zw);
     float dVe = (Ue_in - Ve_in);
-    
     float Ve  = 
         Ue_in > Ve_in 
             ? Ve_in + dVe*(dt/gammae)
             : Ve_in + dVe*(dt/ae);
     float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
-    
-    // tau * V = - V + a * U * (1-V)
-    // tau * V = - V - a * U * V + a * U
-    // tau * V = a * U - (1 + a*U) * V
-    
-    //float Ve  = 
-    //        : Ve_in + dVe*(dt/ae);
-    //float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
-    
     gl_FragColor = vec4(
         EncodeFloatXY(Ve),
         EncodeFloatXY(Vi));
@@ -237,11 +224,7 @@ void main() {
         gl_FragColor = c;
     } else {
         zm = (zm-0.5)*PADFACTOR+0.5;
-        if (zm!=clamp(zm,0.,1.)) {
-            gl_FragColor = vec4(0.0);
-            return;
-        }
-
+        if (zm!=clamp(zm,0.,1.)) {gl_FragColor = vec4(0.0); return;}
         vec4 d = texture2D(hist,zm)*2.0;
         
         if (XY.x<1.) {
@@ -385,21 +368,21 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
     <canvas id='maincanvas' style="position:absolute; left:200px; z-index: 1;"> This application relies on the HTML5 Canvas element and Javascript. If you have Javascript disabled, try re-enabling it for this page. </canvas>
 
     <!-- x-axis label for plot on bottom left -->
-    <div style='position:absolute;bottom:-512px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:70%;'>E-cell firing rate ∈[0,1]</div>
+    <div style='position:absolute;bottom:-1024px;left:200px;width:512px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:100%;'>E-cell firing rate ∈[0,1]</div>
     <!-- y-axis label for plot on bottom left -->
-    <div style='position:absolute;bottom:-394px;left:82px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);font-size:70%;'>
+    <div style='position:absolute;bottom:-788px;left:-40px;width:512px;height:20px;z-index:2;line-height:20px;text-align:center;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);font-size:100%;'>
         I-cell firing rate ∈[0,1]
     </div>
     <!-- title for plot on bottom left -->
-    <div style='position:absolute;bottom:-276px;left:200px;width:256px;height:15px;z-index:2;line-height:15px;text-align:center;font-size:70%;'>E/I trajectories in phase space</br>Steady-state adaptation</div>
+    <div style='position:absolute;bottom:-552px;left:200px;width:512px;height:15px;z-index:2;line-height:15px;text-align:center;font-size:100%;'>E/I trajectories in phase space</br>Steady-state adaptation</div>
     
     <!-- title for plot on top left -->
-    <div style='position:absolute;bottom:-20px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Firing rate variables<br/>Red=E Green=I Blue=|E-I|</div>
+    <div style='position:absolute;bottom:-20px;left:200px;width:512px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:110%;'>Firing rate variables<br/>Red=E Green=I Blue=|E-I|</div>
     <!-- title for plot on top right -->
-    <div style='position:absolute;bottom:-20px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Adaptation variables<br/>Red=I Green=E Blue=|E-I|</div>
+    <div style='position:absolute;bottom:-20px;left:712px;width:512px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:110%;'>Adaptation variables<br/>Red=I Green=E Blue=|E-I|</div>
     
     <!-- title for plot on bottom right -->
-    <div style='position:absolute;bottom:-276px;left:456px;width:256px;height:15px;z-index:2;line-height:15px;text-align:center;font-size:70%;'>E/I trajectories in phase space</br>With, without adaptation</div>
+    <div style='position:absolute;bottom:-552px;left:712px;width:512px;height:15px;z-index:2;line-height:15px;text-align:center;font-size:100%;'>E/I trajectories in phase space</br>With, without adaptation</div>
     
 
 
@@ -434,11 +417,10 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
             <input class="button" type="button" value="Randomize"/>
         </div>
     </div>
-
     <div id="equation">
     \[\textrm{E-cells:  } \tau_e \dot{U_e} = -U_e + f( a_{ee}  \cdot K_e \star U_e - a_{ie}  \cdot K_i \star U_i - \theta_e + g_e S(t) - \beta_e V_e)\]
     \[\textrm{I-cells:  } \tau_i \dot{U_i} = -U_i + f( a_{ei}  \cdot K_e \star U_e - a_{ii}  \cdot K_i \star U_i - \theta_i + g_i S(t) - \beta_i V_i )\]
-    \[\textrm{E-cell adaptation:  } \alpha_e \dot{V_e} = U_e - V_e \]
+    \[\textrm{E-cell adaptation:  } \tau_{ve} \dot{V_e} = U_e - V_e,\,\, \tau_{ve} = \begin{cases} \alpha_e & \text{if }V_e< U_e \\ \gamma_e & \text{if }V_e\ge U_e\end{cases} \]
     \[\textrm{I-cell adaptation:  } \alpha_i \dot{V_i} = U_i - V_i \]
     \[\textrm{Interaction kernel (normalized to 1):  } K_{e,i}(x,y) \propto \exp\left(\frac{1}{2} \frac{x^2}{\sigma_{x\,e,i}^2}+\frac{1}{2} \frac{y^2}{\sigma_{y\,e,i}^2}\right)\]
     </div>
@@ -452,7 +434,10 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
 <script type="text/javascript">
 
 presets=[
-['flicker','randomize','dt=1.0;Te=10.0;Ti=20.0;Aei=8.5;Aii=3.0;Aee=10.5;Aie=12.0;Hi=3.5;He=2.0;Ni=0.0;Ne=0.0;Gi=0.0;Ge=1.0;bi=0.0;be=0.0;Amp=0.6;Str=0.0;f=6.8;Se=1;Si=2;ai=1;ae=1;'],
+['Forest_Fire_0','randomize','Aii=3;Aie=18;Ti=5.8;Hi=5.5;Gi=0;Si=0.4;Ni=0;ai=2.7;bi=7.6;Aee=11.1;Aei=5.3;Te=2;He=3.1;Ge=0;Se=0.5;Ne=0.1;ae=1000;gammae=2;be=0.5;dt=2;Amp=11;f=0;'],
+['Forest_Fire_I','randomize','Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;'],
+['Forest_Fire_II','randomize','Aii=1;Aie=15.8;Ti=13;Hi=5.9;Gi=0;Si=0;Ni=0.1;ai=2;bi=7;Aee=9.8;Aei=5;Te=2;He=2.9;Ge=0;Se=0.6;Ne=0.2;ae=1000;gammae=2;be=1;dt=1.7;Amp=11;f=0;'],
+['flicker','randomize','dt=1.0;Te=10.0;Ti=20.0;Aei=8.5;Aii=3.0;Aee=10.5;Aie=12.0;Hi=3.5;He=2.0;Ni=0.0;Ne=0.0;Gi=0.0;Ge=1.0;bi=0.0;be=0.0;Amp=0.6;f=6.8;Se=1;Si=2;ai=1;ae=1;'],
 ['Psychedelic','randomize','Aii=13;Aei=14.5;Ti=12.5;Hi=3.5;Gi=0;Si=2.9;Ni=0;ai=100;bi=0;Aee=16.1;Aie=13.7;Te=4;He=3.1;Ge=0;Se=2;Ne=.75;ae=50;be=0;dt=1;Amp=0;f=0;'],
 ['Rare_Waves','randomize','Aii=13;Aie=14.5;Ti=13;Hi=3.5;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=17.2;Aei=13.7;Te=4;He=3.1;Ge=0;Se=3;Ne=1;ae=50;be=1.3;dt=1;Amp=0;f=0;'],
 ['Oscillators','randomize','Aii=0;Aie=5;Ti=20;Hi=2.5;Gi=0;Si=1;Ni=0.5;ai=100;bi=0;Aee=8;Aei=5;Te=10;He=1;Ge=10;Se=1;Ne=0.5;ae=100;be=1;dt=1;Amp=0;f=6.8;'],
@@ -465,7 +450,9 @@ presets=[
 ['?','randomize','Aii=0;Aie=5;Ti=4;Hi=2.1;Gi=0.3;Si=2.6;Ni=0;ai=12;bi=1.1;Aee=12.6;Aei=9.6;Te=1;He=1.7;Ge=0.6;Se=.8;Ne=0.4;ae=1000;gammae=50;be=5.5;dt=1;Amp=0.3;f=50;'],
 ['Beautiful_Chaos','randomize','Aii=6;Aie=14.3;Ti=50;Hi=4.7;Gi=0;Si=0.1;Ni=0.1;ai=1;bi=0;Aee=8.6;Aei=11.3;Te=3.2;He=2.3;Ge=1;Se=0.8;Ne=0.1;ae=1;gammae=100;be=0;dt=1;Amp=0;f=6.8;'],
 ['Periodic_and_Homoclinic','randomize','Aii=7.3;Aie=21.3;Ti=10;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.2;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.1;Amp=0;f=6.8;'],
-['Periodic_and_Homoclinic_II','randomize','Aii=7.3;Aie=21.3;Ti=8;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.1;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.5;Amp=0;f=6.8;']
+['Periodic_and_Homoclinic_II','randomize','Aii=7.3;Aie=21.3;Ti=8;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.1;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.5;Amp=0;f=6.8;'],
+['Blink','randomize','Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;'],
+['Pretty','randomize','Aii=0;Aie=3.3;Ti=1.9;Hi=1.7;Gi=0;Si=0.9;Ni=0;ai=9;bi=0;Aee=8.9;Aei=5.7;Te=1;He=1.4;Ge=0;Se=0.8;Ne=0.1;ae=20;gammae=1;be=0.9;dt=0.1;Amp=8.6;f=6.5;']
 ]
 
 function main() {
@@ -510,6 +497,8 @@ function main() {
     var gammae = 100.;   // Timescale of excitatory adaptation activation
     var bi  = null;   // Strength of Inhibitory adaptation
     var be  = null;   // Strength of Excitatotu adaptation
+    
+    var Str = 0.5;
 
     var running = 0;
 
@@ -518,18 +507,19 @@ function main() {
     function Stim(t) {return heav(Math.sin(2*Math.PI*t*f/1000.)-Str)*Amp;}
 
     // bit of a hack
-    gl.width = gl.height = 256;
+    var GRID_SIZE = 512;
+    gl.width = gl.height = GRID_SIZE;
 
-    var temp1  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var temp2  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var U      = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var V      = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var UC     = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var noise  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
-    var hist   = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
+    var temp1  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:GRID_SIZE});
+    var temp2  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:GRID_SIZE});
+    var U      = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:GRID_SIZE});
+    var V      = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:GRID_SIZE});
+    var UC     = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:GRID_SIZE});
+    var noise  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:GRID_SIZE});
+    var hist   = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:GRID_SIZE});
     var dohist = getRasterProgram(gl,'histogram');
     var hblur  = GPUGaussianBlur(gl,5.0);
-    var copy   = GPUcopy(gl,256,256);
+    var copy   = GPUcopy(gl,GRID_SIZE,GRID_SIZE);
     var blur   = GPUGaussianMultiBlur16(gl,0.5);
     var gpurng = GPUNoise(gl);
     var rand   = WeakRNG();
