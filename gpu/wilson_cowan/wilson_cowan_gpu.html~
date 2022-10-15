@@ -35,16 +35,20 @@
 // cowan kernel below. The parameters.js library must be used to
 // parse and handle this parameter list. This bridges some of the
 // issues with interfacing a weakly typed language like javascript
-// with the strong typing of WebGLSL.
+// with the strong typing of WebGLSL. Also, passing parameters to
+// shaders does not by default use a functional syntax, as the WebGL
+// API more or less exposes a state machine. This circumvents some
+// of these limitations.
 // Arrays passed to shader
 sampler2D Uin;
-sampler2D Vin;
 sampler2D Uconv;
 sampler2D noise;
 // Parameters, may be compiled or passed as arguments
 float dt;  // Euler integrator time step
 float Te;  // Excitatory population time constant (ms)
 float Ti;  // Inhibitory population time constant (ms)
+float ai;  // Timescale of inhibitory adaptation
+float ae;  // Timescale of excitatory adaptation
 float Aee; // E-E coupling
 float Aie; // Excitation of Inhibitory coupling
 float Aei; // Inhibition of Excitatory coupling
@@ -62,19 +66,9 @@ float s;   // External stimulation
 <script id="wc_kernel" type="x-fragment">
 #define twopi 6.283185307179586
 #define F(x) (1./(1.+exp(-(x))))
-vec2 EncodeFloatXY( float v ) {
-  vec2 enc = vec2(1.0, 255.0) * v;
-  enc = fract(enc);
-  enc -= enc.yy * vec2(1./255.,0.);
-  return enc;
-}
-float DecodeFloatXY( vec2 xy ) {
-  return dot( xy, vec2(1.,1./255.) );
-}
 void main() {
     vec2 XY   = gl_FragCoord.xy/vec2(W,H);
     vec4 U    = texture2D(Uin  , XY); // raw fields
-    vec4 V    = texture2D(Uin  , XY); // adaptation fields
     vec4 Uc   = texture2D(Uconv, XY); // convolved fields
 
     vec4 n    = texture2D(noise, XY)*.999+0.0001; // uniform noise
@@ -82,107 +76,22 @@ void main() {
     vec2 T    = twopi*n.zw;           // into Gaussian using Box-
     vec4 N    = vec4(R*cos(T),R*sin(T))*sqrt(dt); // Muller transform.
 
-
-    float Ce = DecodeFloatXY(Uc.xy);
-    float Ci = DecodeFloatXY(Uc.zw);
-    float Ue = DecodeFloatXY(U.xy);
-    float Ui = DecodeFloatXY(U.zw);
-    float Ve = DecodeFloatXY(V.xy);
-    float Vi = DecodeFloatXY(V.zw);
-
-
-    float Ae  = F(Aee*Ce-Aie*Ci-He+Ge*s-Ve*be+Ne*N.x);
-    float Ai  = F(Aei*Ce-Aii*Ci-Hi+Gi*s-Vi*bi+Ni*N.x);
-    float Ue_out  = Ue + (Ae - Ue)*(dt/Te);
-    float Ui_out  = Ui + (Ai - Ui)*(dt/Ti);
-
-    //gl_FragColor = floor(255.*vec4(Ue_out,0.,Ui_out,0.)+.5)/255.;
-
-    gl_FragColor = vec4(
-        EncodeFloatXY(Ue_out),
-        EncodeFloatXY(Ui_out));
-
-}
-</script>
-
-
-<script id="adapt_kernel-parameters" type="x-fragment-parameters">
-// Note: this is not Javascript and these values are not
-// directly accessible to either the main function or the wilson-
-// cowan kernel below. The parameters.js library must be used to
-// parse and handle this parameter list. This bridges some of the
-// issues with interfacing a weakly typed language like javascript
-// with the strong typing of WebGLSL.
-// Arrays passed to shader
-sampler2D Uin;
-sampler2D Vin;
-// Parameters, may be compiled or passed as arguments
-float dt;  // Euler integrator time step
-float ai;  // Timescale of inhibitory adaptation
-float ae;  // Timescale of excitatory adaptation
-</script>
-<script id="adapt_kernel" type="x-fragment">
-#define twopi 6.283185307179586
-#define F(x) (1./(1.+exp(-(x))))
-vec2 EncodeFloatXY( float v ) {
-  vec2 enc = vec2(1.0, 255.0) * v;
-  enc = fract(enc);
-  enc -= enc.yy * vec2(1./255.,0.);
-  return enc;
-}
-float DecodeFloatXY( vec2 xy ) {
-  return dot( xy, vec2(1.,1./255.) );
-}
-void main() {
-    vec2 XY   = gl_FragCoord.xy/vec2(W,H);
-    vec4 U    = texture2D(Uin  , XY); // raw fields
-    vec4 V    = texture2D(Vin  , XY); // adaptation fields
-
-    float Ue_in = DecodeFloatXY(U.xy);
-    float Ui_in = DecodeFloatXY(U.zw);
-    float Ve_in = DecodeFloatXY(V.xy);
-    float Vi_in = DecodeFloatXY(V.zw);
-
-    float Ve  = 
-        Ue_in > Ve_in? Ue_in :
-        Ve_in + (Ue_in - Ve_in)*(dt/ae);
-    float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
-
-
-    gl_FragColor = vec4(
-        EncodeFloatXY(Ve),
-        EncodeFloatXY(Vi));
-
-
-    //gl_FragColor = floor(255.*vec4(Ve,0.,Vi,0.)+.5)/255.;
+    float Ae  = F(Aee*Uc.x-Aie*Uc.y-He+Ge*s-U.z*be+Ne*N.x);
+    float Ai  = F(Aei*Uc.x-Aii*Uc.y-Hi+Gi*s-U.w*bi+Ne*N.x);
+    float Ue  = U.x + (Ae -U.x)*(dt/Te);
+    float Ui  = U.y + (Ai -U.y)*(dt/Ti);
+    float Ve  = U.z + (U.x-U.z)*(dt/ae);
+    float Vi  = U.w + (U.y-U.w)*(dt/ai);
+    gl_FragColor = floor(255.*vec4(Ue,Ui,Ve,Vi)+.5)/255.;
 }
 </script>
 <script id="colormap" type="x-shader/x-fragment">
 uniform sampler2D Uin;
-uniform sampler2D Vin;
-float DecodeFloatXY( vec2 xy ) {
-  return dot( xy, vec2(1.,1./255.) );
-}
 void main() {
     vec2  XY = gl_FragCoord.xy/vec2(W,H);
-    vec2  zm = mod(XY*2.,1.);
-    vec4  U  = texture2D(Uin  ,zm);
-    vec4  V  = texture2D(Vin  ,zm);
-    float Ue = DecodeFloatXY(U.xy);
-    float Ui = DecodeFloatXY(U.zw);
-    float Ve = DecodeFloatXY(U.xy);
-    float Vi = DecodeFloatXY(U.zw);
-    /*
-    float c  =
-        XY.y<0.5
-        ?   XY.x<0.5
-            ? Ue
-            : Ui
-        :   XY.x<0.5
-            ? Ve
-            : Vi;
-    gl_FragColor = vec4(c,c,c,1.);
-    */
+    vec4  U  = texture2D(Uin   ,XY);
+    float Ue  = U.r;
+    float Ui  = U.g;
     gl_FragColor = vec4(Ue,Ui,abs(Ue-Ui)*3.0,1.);
 }
 </script>
@@ -211,7 +120,9 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
     <div class="controlbox" style="font-size:85%;position:relative;">
         <div style="clear:both;display:block">
             <div class="controls">
-                Inhibitory
+                <div class="controltext">
+                    Inhibitory
+                </div>
                 <div class="control">$a_{ii}$
                     <input type="number" step="0.1" max="100" min="0"    name="Aii" value="3.0"/>
                 </div>
@@ -241,7 +152,10 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
                 </div>
             </div>
             <div class="controls">
-                Excitatory
+                
+                <div class="controltext">
+                    Excitatory
+                </div>
                 <div class="control">$a_{ee}$
                     <input type="number" step="0.1" max="100" min="0"    name="Aee" value="10.0"/>
                 </div>
@@ -274,13 +188,17 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
         <br>
         <div style="clear:both;display:block">
             <div class="controls">
-                Time stepping
+                <div class="controltext">
+                    Time stepping
+                </div>
                 <div class="control">$\Delta t$
                     <input type="number" step="0.1" max="100"  min="0"    name="dt"  value="2.0"/>
                 </div>
             </div>
             <div class="controls">
-                Stimulus
+                <div class="controltext">
+                    Stimulus
+                </div>
                 <div class="control">$A$
                     <input type="number" step="0.1" max="100"  min="-100" name="Amp" value="0.5"/>
                 </div>
@@ -290,19 +208,17 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
             </div>
         </div>
 
-        <div style="position:absolute;bottom:0;left:0;">
         <div class="controltext">
             Presets
         </div>
         <div class="button_container" id="presets">
-        </div>
         </div>
 
     </div>
 
     <div style="position:relative;">
     <canvas id='maincanvas' style="position:absolute; left:200px; z-index: 1;"> This application relies on the HTML5 Canvas element and Javascript. If you have Javascript disabled, try re-enabling it for this page. </canvas>
-    <canvas id='ppcanvas' style="position:absolute; left:712px; z-index: 1;"> This application relies on the HTML5 Canvas element and Javascript. If you have Javascript disabled, try re-enabling it for this page. </canvas>
+
 
     <div id='canvasoverlay' style="position:absolute; left:200px; z-index: 2;">
         <div style="display: table-cell; vertical-align: middle;">
@@ -333,6 +249,8 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
             <input class="button" type="button" value="Save"/>
             <input class="button" type="button" value="Load"/>
             <input class="button" type="button" value="Randomize"/>
+            <input class="button" type="button" value="Perturb Homogeneous"/>
+            <input class="button" type="button" value="Compile Kernel"/>
         </div>
     </div>
 
@@ -354,8 +272,8 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
 
 presets=[
 ['flicker','randomize','dt=1.0;Te=10.0;Ti=20.0;Aei=12.0;Aii=3.0;Aee=10.5;Aie=8.5;Hi=3.5;He=2.0;Ni=0.0;Ne=0.0;Gi=0.0;Ge=1.0;bi=0.0;be=0.0;Amp=0.6;Str=0.0;f=6.8;Se=1;Si=2;ai=1;ae=1;'],
-['Psychedelic','randomize','Aii=13;Aie=14.5;Ti=12.5;Hi=3.5;Gi=0;Si=2.9;Ni=0;ai=100;bi=0;Aee=16.1;Aei=13.7;Te=4;He=3.1;Ge=0;Se=2;Ne=.75;ae=50;be=0;dt=1;Amp=0;f=0;'],
-['Rare_Waves','randomize','Aii=13;Aie=14.5;Ti=13;Hi=3.5;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=17.2;Aei=13.7;Te=4;He=3.1;Ge=0;Se=3;Ne=1;ae=50;be=1.3;dt=1;Amp=0;f=0;']
+['spiral','randomize','Aii=0;Aie=10;Ti=10;Hi=3.5;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=14;Aei=10;Te=5;He=2.5;Ge=1;Se=1;Ne=0.5;ae=50;be=1;dt=1;Amp=0;f=0;'],
+['Psychedelic','randomize','Aii=13;Aie=14.5;Ti=12.5;Hi=3.5;Gi=0;Si=2.9;Ni=0;ai=100;bi=0;Aee=16.1;Aei=13.7;Te=4;He=3.1;Ge=0;Se=2;Ne=.75;ae=50;be=0;dt=1;Amp=0;f=0;']
 ];
 
 function main() {
@@ -408,7 +326,6 @@ function main() {
 
     var temp   = newBasicFramebuffer(gl,{wrap : gl.REPEAT});
     var U      = newBasicFramebuffer(gl,{wrap : gl.REPEAT});
-    var V      = newBasicFramebuffer(gl,{wrap : gl.REPEAT});
     var UC     = newBasicFramebuffer(gl,{wrap : gl.REPEAT});
     var noise  = newBasicFramebuffer(gl,{wrap : gl.REPEAT});
     var color  = getRasterProgram(gl,'colormap');
@@ -417,7 +334,6 @@ function main() {
     var gpurng = GPUNoise(gl);
     var rand   = WeakRNG();
     var wc_kernel; // compiled later after initialization
-    var adapt_kernel; // compiled later after initialization
     randomize();
 
     /** Put parameters in kernel at compile time to take advantage
@@ -432,11 +348,13 @@ function main() {
         } catch (err) {
             console.log(err.message);
         }
-        var wc_header = compile_bind(
-            get_parameters('wc_kernel-parameters'), {
+        var signature  = get_parameters('wc_kernel-parameters');
+        var cb     = compile_bind(signature,{
             dt : dt,  // Euler integrator time step
             Te : Te,  // Excitatory population time constant (ms)
             Ti : Ti,  // Inhibitory population time constant (ms)
+            ai : ai,  // Timescale of inhibitory adaptation
+            ae : ae,  // Timescale of excitatory adaptation
             Aee: Aee, // E-E coupling
             Aie: Aie, // Excitation of Inhibitory coupling
             Aei: Aei, // Inhibition of Excitatory coupling
@@ -449,20 +367,12 @@ function main() {
             Ni : Ni,  // Noise level (uniform) in I cells
             bi : bi,  // Strength of Inhibitory adaptation
             be : be,  // Strength of Excitatory adaptation
-        })[0];
-        wc_kernel = buildRasterProgram(gl,
-            wc_header+$('wc_kernel').text);
-
-        var adapt_header = compile_bind(
-            get_parameters('adapt_kernel-parameters'), {
-            dt : dt,  // Euler integrator time step
-            ai : ai,  // Timescale of inhibitory adaptation
-            ae : ae,  // Timescale of excitatory adaptation
-        })[0];
-        adapt_kernel = buildRasterProgram(gl,
-            adapt_header+$('adapt_kernel').text);
-
-        blur      = GPUGaussianMultiBlur(gl,Se,Se,Si,Si);
+        });
+        var header = cb[0];
+        var resid  = cb[1];
+        var wc_kernel_source = header + $('wc_kernel').text;
+        wc_kernel = buildRasterProgram(gl,wc_kernel_source);
+        blur      = GPUGaussianMultiBlur(gl,Se,Si,1,1);
     }
 
     function nothing()   {}
@@ -477,14 +387,14 @@ function main() {
         if (inputs[i].type=='number') {
             controls.push(inputs[i]);
             var input = inputs[i];
-            input.addEventListener('input',compile_kernel);
+            input.addEventListener('input',compilekernel);
         }
     function setcontrols() {
         for (var i=0; i<controls.length; i++) {
             var control = controls[i];
             eval('control.value='+control.name);
         }
-        compile_kernel();
+        compilekernel();
     }
 
     var buttons = [];
@@ -541,6 +451,9 @@ function main() {
         result = prompt("Paste saved parameters below:\n","");
         if (result) loadstring(result);
     }
+    function compilekernel() {
+        compile_kernel();
+    }
 
 
     preset_container = document.getElementById('presets');
@@ -570,6 +483,7 @@ function main() {
     console.log
     eval(presets[0][2]);
     setcontrols();
+    //compile_kernel();
 
     var timestep = 0;
     function iterate() {
@@ -577,20 +491,13 @@ function main() {
             gpurng(noise,temp);
             blur(U,temp,UC);
             var s = Stim(timestep*dt);
-            wc_kernel({
-                Uin   :U,
-                Vin   :V,
+            wc_kernel({Uin   :U,
                 Uconv :UC,
                 noise :noise,
                 s     :s,
                 },temp);
             copy(temp,U);
-            adapt_kernel({
-                Uin   :U,
-                Vin   :V
-                },temp);
-            copy(temp,V);
-            color();
+            color({Uin:U});
             timestep += 1;
         } catch (err) {
             console.log(err.message);

@@ -33,9 +33,10 @@
 <script id="wc_kernel-parameters" type="x-fragment-parameters">
 // Note: this is not Javascript and these values are not
 // directly accessible to either the main function or the wilson-
-// cowan kernel below. These are type declarations, to be 
-// parsed by the parameters.js library, to help bridge the 
-// weakly-typed javascript with the strong typing of WebGLSL.
+// cowan kernel below. The parameters.js library must be used to
+// parse and handle this parameter list. This bridges some of the
+// issues with interfacing a weakly typed language like javascript
+// with the strong typing of WebGLSL.
 sampler2D Uin;
 sampler2D Vin;
 sampler2D Uconv;
@@ -56,21 +57,14 @@ float Ni;  // Noise level (uniform) in I cells
 float Gi;  // Gain on stimulation of i cells
 float Ge;  // Gain on stimulation of e cells
 float s;   // External stimulation
-float stimsize;   // Size of stimulation spot
-float stimradius; // Radial displacement of simulation spot
-float bradius;    // boundary mask radius
-float bhardness;  // boundary hardness 
 </script>
 <script id="wc_kernel" type="x-fragment">
 #define twopi 6.283185307179586
 #define F(x) (1./(1.+exp(-(x))))
 vec2 EncodeFloatXY( float v ) {
-  // Fixed point float encoding ranges in (0,1)
-  v        = clamp(v,0.0,1.0);
-  v       -= 0.00000762951; //predictable rounding
   vec2 enc = vec2(1.0, 255.0) * v;
-  enc      = fract(enc);
-  enc     -= enc.yy * vec2(1./255.,0.);
+  enc = fract(enc);
+  enc -= enc.yy * vec2(1./255.,0.);
   return enc;
 }
 float DecodeFloatXY( vec2 xy ) {
@@ -87,8 +81,6 @@ void main() {
     vec2 T    = twopi*n.zw;           // into Gaussian using Box-
     vec4 N    = vec4(R*cos(T),R*sin(T))*sqrt(dt); // Muller transform.
 
-    // Unpack state from texture information
-    // using two channels per float (16 bit fixed point)
     float Ce = DecodeFloatXY(Uc.xy);
     float Ci = DecodeFloatXY(Uc.zw);
     float Ue = DecodeFloatXY(U.xy);
@@ -96,18 +88,8 @@ void main() {
     float Ve = DecodeFloatXY(V.xy);
     float Vi = DecodeFloatXY(V.zw);
 
-    float  d = length(XY-vec2(0.5,0.5)+vec2(0.5,0.5)*stimradius*bradius);
-    float s2 = s*exp(-(d*d)*stimsize);
-    
-    d = length(XY-vec2(.5,.5));
-    float rr = 1./(1.+exp(-(d-bradius)*bhardness));
-    float m1 = exp(-(rr*rr));
-
-    Ce = Ce*m1;
-    Ue = Ue*m1;
-
-    float Ae  = F(Aee*Ce-Aei*Ci-He+Ge*s2-Ve*be+Ne*N.x);
-    float Ai  = F(Aie*Ce-Aii*Ci-Hi+Gi*s2-Vi*bi+Ni*N.y);
+    float Ae  = F(Aee*Ce-Aei*Ci-He+Ge*s-Ve*be+Ne*N.x);
+    float Ai  = F(Aie*Ce-Aii*Ci-Hi+Gi*s-Vi*bi+Ni*N.y);
     float Ue_out  = Ue + (Ae - Ue)*(dt/Te);
     float Ui_out  = Ui + (Ai - Ui)*(dt/Ti);
 
@@ -124,17 +106,14 @@ sampler2D Vin;
 float dt;  // Euler integrator time step
 float ai;  // Timescale of inhibitory adaptation
 float ae;  // Timescale of excitatory adaptation
-float gammae;
 </script>
 <script id="adapt_kernel" type="x-fragment">
 #define twopi 6.283185307179586
 #define F(x) (1./(1.+exp(-(x))))
 vec2 EncodeFloatXY( float v ) {
-  v = clamp(v,0.,1.);
-  v -= 0.00000762951;
   vec2 enc = vec2(1.0, 255.0) * v;
   enc = fract(enc);
-  enc.x -= enc.y/255.0;
+  enc -= enc.yy * vec2(1./255.,0.);
   return enc;
 }
 float DecodeFloatXY( vec2 xy ) {
@@ -148,11 +127,7 @@ void main() {
     float Ui_in = DecodeFloatXY(U.zw);
     float Ve_in = DecodeFloatXY(V.xy);
     float Vi_in = DecodeFloatXY(V.zw);
-    float dVe = (Ue_in - Ve_in);
-    float Ve  = 
-        Ue_in > Ve_in 
-            ? Ve_in + dVe*(dt/gammae)
-            : Ve_in + dVe*(dt/ae);
+    float Ve  = Ve_in + (Ue_in - Ve_in)*(dt/ae);
     float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
     gl_FragColor = vec4(
         EncodeFloatXY(Ve),
@@ -164,28 +139,25 @@ void main() {
 <script id="histogram" type="x-shader/x-fragment">
 uniform sampler2D Uin;
 float DecodeFloatXY( vec2 xy ) {
-    return dot( xy, vec2(1.,1./255.) );
+  return dot( xy, vec2(1.,1./255.) );
 }
 void main() {
     vec2  zm = gl_FragCoord.xy/vec2(W,H);
     vec4  U  = texture2D(Uin  ,zm);
-    vec4  d  = vec4(1.0);
-    for (int y=0; y<H; y+=(H/16)) {
-        for (int x=0; x<W; x+=(W/16)) { 
-            // Sample location on screen
-            vec2 z  = clamp(vec2(float(x),float(y))/vec2(W,H)+zm,0.2,1.-0.2);
-            U       = texture2D(Uin  ,z);
-            // Distance between pixel state and histogram bin center
+    vec4 d = vec4(1.0);
+    for (int y=0; y<H; y+=(H/4)) {
+        for (int x=0; x<W; x+=(W/4)) { 
+            vec2 z = mod(vec2(float(x),float(y))/vec2(W,H)+zm,1.);
+            U  = texture2D(Uin  ,z);
             float e = zm.x-DecodeFloatXY(U.xy);
             float i = zm.y-DecodeFloatXY(U.zw);
             float dd = e*e+i*i;
-            // If state is close to (within) this bin, increment
             if (dd<0.0005) {
-                d *= 0.999;//75;
+                d *= 0.5;
             }
         }
     }
-    gl_FragColor = pow(1.0-pow(d,vec4(10.)),vec4(0.2));
+    gl_FragColor = 1.0-d;
 }
 </script>
 
@@ -222,7 +194,7 @@ vec2 dU_full_adaptation(vec2 u) {
         F((Aee)*u.x-be-Aei*u.y-He)-u.x,
         F(Aie*u.x-bi-Aii*u.y-Hi)-u.y);
 }
-#define PADFACTOR 1.3
+#define PADFACTOR 1.2
 void main() {
     vec2  XY = gl_FragCoord.xy/vec2(W,H);
     vec2  dx = vec2(PADFACTOR*1.0/float(W),0.0);
@@ -235,18 +207,19 @@ void main() {
     float Ve = DecodeFloatXY(V.xy);
     float Vi = DecodeFloatXY(V.zw);
     if (XY.y>1.) {
-        // Top half of screen: draw neural fields as colors
         vec4 c = XY.x<1.
             ? vec4(Ue,Ui,abs(Ue-Ui)*3.0,1.0)
             : vec4(Vi,Ve,abs(Ve-Vi)*3.0,1.0);
         gl_FragColor = c;
     } else {
-        // Bottom half of screen: Histograms and nullclines
         zm = (zm-0.5)*PADFACTOR+0.5;
-        if (zm!=clamp(zm,0.,1.)) {gl_FragColor = vec4(0.0); return;}
+        if (zm!=clamp(zm,0.,1.)) {
+            gl_FragColor = vec4(0.0);
+            return;
+        }
+
         vec4 d = texture2D(hist,zm)*2.0;
         
-        // Draw nullclines
         if (XY.x<1.) {
             vec2 dU  = dU_steady_state(zm);
             vec2 dUy = dU_steady_state(zm+dy);
@@ -289,224 +262,133 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
 <div class="outer" id="mainframe">
 <div class="middle">
 <div id='canvasdiv'>
-    <div class="controlbox" style="font-size:80%;position:relative;">
+    <div class="controlbox" style="font-size:85%;position:relative;">
         <div style="clear:both;display:block">
             <div class="controls">
-                <div class="controltext">
-                    Inhibitory
-                </div>
+                <div class="controltext">Inhibitory</div>
                 <div class="control">$a_{ii}$
-                    <input type="number" step="0.1" max="100" min="0" name="Aii" value="3.0"/>
+                    <input type="number" step="0.1" max="100" min="0"    name="Aii" value="3.0"/>
                 </div>
                 <div class="control">$a_{ie}$
-                    <input type="number" step="0.1" max="100" min="0" name="Aie" value="12.0"/>
+                    <input type="number" step="0.1" max="100" min="0"    name="Aie" value="12.0"/>
                 </div>
-            </div>
-            <div class="controls">
-                <div class="controltext">
-                    Excitatory
-                </div>
-                <div class="control">$a_{ee}$
-                    <input type="number" step="0.1" max="100" min="0" name="Aee" value="10.0"/>
-                </div>
-                <div class="control">$a_{ei}$
-                    <input type="number" step="0.1" max="100" min="0" name="Aei" value="8.5"/>
-                </div>
-            </div>
-        </div>
-        <div class="controltext">
-            Time constants (ms)
-        </div>
-        <div style="clear:both;display:block">
-            <div class="controls">
                 <div class="control">$\tau_i$
-                    <input type="number" step="0.1" max="100" min="0" name="Ti" value="20.0"/>
+                    <input type="number" step="0.1" max="100" min="0"    name="Ti"  value="20.0"/>
                 </div>
-            </div>
-            <div class="controls">
-                <div class="control">$\tau_e$
-                    <input type="number" step="0.1" max="100" min="0" name="Te" value="10.0"/>
-                </div>
-            </div>
-        </div>
-        <div class="controltext">
-            Thresholds
-        </div>
-        <div style="clear:both;display:block">
-            <div class="controls">
                 <div class="control">$\theta_i$
-                    <input type="number" step="0.1" max="100" min="-100" name="Hi" value="3.5"/>
+                    <input type="number" step="0.1" max="100" min="-100" name="Hi"  value="3.5"/>
                 </div>
-            </div>
-            <div class="controls">
-                <div class="control">$\theta_e$
-                    <input type="number" step="0.1" max="100" min="-100" name="He" value="2.0"/>
-                </div>
-            </div>
-        </div>
-        <div class="controltext">
-            Stimulus gain
-        </div>
-        <div style="clear:both;display:block">
-            <div class="controls">
                 <div class="control">$g_i$
-                    <input type="number" step="0.1" max="100" min="-100" name="Gi" value="0.0"/>
+                    <input type="number" step="0.1" max="100" min="-100" name="Gi"  value="0.0"/>
                 </div>
-            </div>
-            <div class="controls">
-                <div class="control">$g_e$
-                    <input type="number" step="0.1" max="100" min="-100" name="Ge" value="0.8"/>
-                </div>
-            </div>
-        </div>
-        <div class="controltext">
-            Spatial spread
-        </div>
-        <div style="clear:both;display:block">
-            <div class="controls">
                 <div class="control">$\sigma_i$
-                    <input type="number" step="0.1" max="100" min="0" name="Si" value="1.5"/>
+                    <input type="number" step="0.1" max="100" min="0"    name="Si"  value="1.5"/>
                 </div>
-            </div>
-            <div class="controls">
-                <div class="control">$\sigma_e$
-                    <input type="number" step="0.1" max="100" min="0" name="Se" value="0.6"/>
-                </div>
-            </div>
-        </div>
-        <div class="controltext">
-            Noise
-        </div>
-        <div style="clear:both;display:block">
-            <div class="controls">
                 <div class="control">$N_i$
-                    <input type="number" step="0.1" max="100" min="0" name="Ni" value="0.1"/>
+                    <input type="number" step="0.1" max="100" min="0"    name="Ni"  value="0.1"/>
                 </div>
-            </div>
-            <div class="controls">
-                <div class="control">$N_e$
-                    <input type="number" step="0.1" max="100" min="0" name="Ne" value="0.1"/>
-                </div>
-            </div>
-        </div>
-        <div class="controltext">
-            Adaptation
-        </div>
-        <div style="clear:both;display:block">
-            <div class="controls">
                 <div class="control">$\alpha_i$
-                    <input type="number" step="0.1" max="1000" min="0" name="ai" value="5.0"/>
+                    <input type="number" step="0.1" max="1000" min="0"    name="ai"  value="5.0"/>
                 </div>
                 <div class="control">$\beta_i$
-                    <input type="number" step="0.1" max="100"  min="-100" name="bi" value="0.0"/>
+                    <input type="number" step="0.1" max="100"  min="-100" name="bi"  value="0.0"/>
                 </div>
             </div>
             <div class="controls">
-                <div class="control">$\alpha_e$
-                    <input type="number" step="0.1" max="1000" min="0" name="ae" value="5.0"/>
+                <div class="controltext">Excitatory</div>
+                <div class="control">$a_{ee}$
+                    <input type="number" step="0.1" max="100" min="0"    name="Aee" value="10.0"/>
                 </div>
-                <div class="control">$\gamma_e$
-                    <input type="number" step="0.1" max="1000" min="0" name="gammae" value="5.0"/>
+                <div class="control">$a_{ei}$
+                    <input type="number" step="0.1" max="100" min="0"    name="Aei" value="8.5"/>
+                </div>
+                <div class="control">$\tau_e$
+                    <input type="number" step="0.1" max="100" min="0"    name="Te"  value="10.0"/>
+                </div>
+                <div class="control">$\theta_e$
+                    <input type="number" step="0.1" max="100" min="-100" name="He"  value="2.0"/>
+                </div>
+                <div class="control">$g_e$
+                    <input type="number" step="0.1" max="100" min="-100" name="Ge"  value="0.8"/>
+                </div>
+                <div class="control">$\sigma_e$
+                    <input type="number" step="0.1" max="100" min="0"    name="Se"  value="0.6"/>
+                </div>
+                <div class="control">$N_e$
+                    <input type="number" step="0.1" max="100" min="0"    name="Ne"  value="0.1"/>
+                </div>
+                <div class="control">$\alpha_e$
+                    <input type="number" step="0.1" max="1000" min="0"    name="ae"  value="5.0"/>
                 </div>
                 <div class="control">$\beta_e$
-                    <input type="number" step="0.1" max="100"  min="-100" name="be" value="0.0"/>
+                    <input type="number" step="0.1" max="100"  min="-100" name="be"  value="0.0"/>
                 </div>
             </div>
         </div>
         <br>
         <div style="clear:both;display:block">
             <div class="controls">
-                <div class="controltext">
-                    Stimulation
+                <div class="controltext">Time stepping</div>
+                <div class="control">$\Delta t$
+                    <input type="number" step="0.1" max="100"  min="0"    name="dt"  value="2.0"/>
                 </div>
+            </div>
+            <div class="controls">
+                <div class="controltext">Stimulus</div>
                 <div class="control">$A$
                     <input type="number" step="0.1" max="100"  min="-100" name="Amp" value="0.5"/>
                 </div>
                 <div class="control">$f$
-                    <input type="number" step="1" max="1000" min="0" name="f" value="50.0"/>
-                </div>
-            </div>
-            <div class="controls">
-                <div class="controltext">
-                    Time stepping
-                </div>
-                <div class="control">$\Delta t$
-                    <input type="number" step="0.1" max="100"  min="0" name="dt" value="2.0"/>
-                </div>
-                <div class="control">skip
-                    <input type="number" step="1" max="100"  min="0" name="tskip" value="1"/>
+                    <input type="number" step="0.1" max="1000" min="0"    name="f"   value="50.0"/>
                 </div>
             </div>
         </div>
-        <div style="clear:both;display:block">
-            <div class="controls" style="width:200px;">
-                <div class="control">size
-                    <input type="number" step="0.1" max="1" min="0.1" name="stimsize" value="0.3"/>
-                </div>
-                <div class="control">location
-                    <input type="number" step="0.1" max="1" min="0" name="stimradius" value="0.7"/>
-                </div>
-            </div>
-        </div>
-        <div class="controltext">
-            Boundary
-        </div>
-        <div style="clear:both;display:block">
-            <div class="controls" style="width:200px;">
-                <div class="control">radius
-                    <input type="number" step="0.05" max="1"  min="0" name="bradius" value="0.45"/>
-                </div>
-                <div class="control">hardness
-                    <input type="number" step="0.05" max="1"  min="0" name="bhardness" value="0.5"/>
-                </div>
-            </div>
-        </div>
-            
-        <div class="controltext">
-            Presets
-        </div>
+
+        <div style="position:absolute;bottom:0;left:0;">
+        <div class="controltext">Presets</div>
         <div class="button_container" id="presets">
+        </div>
         </div>
 
     </div>
 
     <div style="position:relative;">
-        <canvas id='maincanvas' style="position:absolute; left:200px; z-index: 1;"> 
-        This application relies on the HTML5 Canvas element and Javascript. 
-        If you have Javascript disabled, try re-enabling it for this page. 
-        </canvas>
+    <canvas id='maincanvas' style="position:absolute; left:200px; z-index: 1;"> This application relies on the HTML5 Canvas element and Javascript. If you have Javascript disabled, try re-enabling it for this page. </canvas>
 
-        <!-- x-axis label for plot on bottom left -->
-        <div style='position:absolute;bottom:-512px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:70%;'>E-cell firing rate ∈[0,1]</div>
-        <!-- y-axis label for plot on bottom left -->
-        <div style='position:absolute;bottom:-394px;left:82px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);font-size:70%;'>
-            I-cell firing rate ∈[0,1]
+    <!-- x-axis label for plot on bottom left -->
+    <div style='position:absolute;bottom:-512px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:70%;'>E-cell firing rate ∈[0,1]</div>
+    <!-- y-axis label for plot on bottom left -->
+    <div style='position:absolute;bottom:-394px;left:82px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);font-size:70%;'>
+        I-cell firing rate ∈[0,1]
+    </div>
+    <!-- title for plot on bottom left -->
+    <div style='position:absolute;bottom:-276px;left:200px;width:256px;height:15px;z-index:2;line-height:15px;text-align:center;font-size:70%;'>E/I trajectories in phase space</br>Steady-state adaptation</div>
+    
+    <!-- title for plot on top left -->
+    <div style='position:absolute;bottom:-20px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Firing rate variables<br/>Red=E Green=I Blue=|E-I|</div>
+    <!-- title for plot on top right -->
+    <div style='position:absolute;bottom:-20px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Adaptation variables<br/>Red=I Green=E Blue=|E-I|</div>
+    
+    <!-- title for plot on bottom right -->
+    <div style='position:absolute;bottom:-276px;left:456px;width:256px;height:15px;z-index:2;line-height:15px;text-align:center;font-size:70%;'>E/I trajectories in phase space</br>With, without adaptation</div>
+    
+
+
+    <div id='canvasoverlay' style="position:absolute; left:200px; z-index: 2;">
+        <div style="display: table-cell; vertical-align: middle;">
+        Click to start
         </div>
-        <!-- title for plot on bottom left -->
-        <div style='position:absolute;bottom:-276px;left:200px;width:256px;height:15px;z-index:2;line-height:15px;text-align:center;font-size:70%;'>E/I trajectories in phase space</br>Steady-state adaptation</div>
-        
-        <!-- title for plot on top left -->
-        <div style='position:absolute;bottom:-20px;left:200px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Firing rate variables<br/>Red=E Green=I Blue=3|E-I|</div>
-        <!-- title for plot on top right -->
-        <div style='position:absolute;bottom:-20px;left:456px;width:256px;height:20px;z-index:2;line-height:20px;text-align:center;font-size:85%;'>Adaptation variables<br/>Red=I Green=E Blue=3|E-I|</div>
-        
-        <!-- title for plot on bottom right -->
-        <div style='position:absolute;bottom:-276px;left:456px;width:256px;height:15px;z-index:2;line-height:15px;text-align:center;font-size:70%;'>E/I trajectories in phase space</br>With, without adaptation</div>
-        
-        <div id='canvasoverlay' style="position:absolute; left:200px; z-index: 2;">
-            <div style="display: table-cell; vertical-align: middle;">
-            Click to start
-            </div>
-        </div>
+    </div>
 
 
-        <div id="equation" style="position:absolute;top:512;left:200w;">
+    <div id="equation" style="position:absolute;top:512;left:200;">
         \[\textrm{E-cells:  } \tau_e \dot{U_e} = -U_e + f( a_{ee}  \cdot K_e \star U_e - a_{ie}  \cdot K_i \star U_i - \theta_e + g_e S(t) - \beta_e V_e)\]
         \[\textrm{I-cells:  } \tau_i \dot{U_i} = -U_i + f( a_{ei}  \cdot K_e \star U_e - a_{ii}  \cdot K_i \star U_i - \theta_i + g_i S(t) - \beta_i V_i )\]
-        \[\textrm{E-cell adaptation:  } \tau_{ve} \dot{V_e} = U_e - V_e,\,\, \tau_{ve} = \begin{cases} \alpha_e & \text{if }V_e< U_e \\ \gamma_e & \text{if }V_e\ge U_e\end{cases} \]
+        \[\textrm{E-cell adaptation:  } \alpha_e \dot{V_e} = U_e - V_e \]
         \[\textrm{I-cell adaptation:  } \alpha_i \dot{V_i} = U_i - V_i \]
         \[\textrm{Interaction kernel (normalized to 1):  } K_{e,i}(x,y) \propto \exp\left(\frac{1}{2} \frac{x^2}{\sigma_{x\,e,i}^2}+\frac{1}{2} \frac{y^2}{\sigma_{y\,e,i}^2}\right)\]
-        </div>
+    </div>
+
 
 
     </div>
@@ -515,13 +397,7 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
     <div class="infotext">
         <h3 style="margin-top:0px;">Wave State Demonstration</h3>
         <span style="font-size:80%;">
-        Beware forward-Euler integration, especially with limit cycles (where the error is always excitatory). 
-        Do not set Δt larger than 1/10th the shortest time constant. 
-        Values larger than 1/5th the shortest time consant are unstable.
-        This code uses webGL shaders and encodes floats as 16-bit fixed point
-        in an ad-hoc way. 
-        Results are for demonstration and exploration only and not guaranteed
-        to be especially accurate. 
+        TODO: info text here
         </span>
         <br/>
         <div class="controltext" style="width:240px;">
@@ -537,7 +413,6 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
             <input class="button" type="button" value="Randomize"/>
         </div>
     </div>
-    
 </div>
 </div>
 </div>
@@ -548,43 +423,16 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
 <script type="text/javascript">
 
 presets=[
-['','randomize','Aii=0;Aie=10.3;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.2;Aei=11.5;Te=1;He=3;Ge=1;Se=15;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=10;f=105;'],
-['','randomize','Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.05;Amp=2;f=370;'],
-['','randomize','Aii=0;Aie=6;Ti=3;Hi=2.7;Gi=0;Si=2;Ni=0;ai=1;bi=0;Aee=7;Aei=6;Te=1;He=0.9;Ge=1;Se=.6;Ne=0.1;ae=1;gammae=1;be=0;dt=.2;Amp=10;f=90;'],
-['','randomize','Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=1;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;'],
-['','randomize','Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=2;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;'],
-['','randomize','Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.7;Aei=11.5;Te=1;He=3;Ge=1;Se=2;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=1;f=200;'],
-['','randomize','Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.4;Aei=11;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=50;'],
-['','randomize','Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;'],
-['','randomize','Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;'],
-['','randomize','Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=280;'],
-['','randomize','Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;'],
-['','randomize','Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;'],
-['','randomize','Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.1;Amp=1;f=160;'],
-['Forest_Fire_0','randomize','Aii=3;Aie=18;Ti=5.8;Hi=5.5;Gi=0;Si=0.4;Ni=0;ai=2.7;bi=7.6;Aee=11.1;Aei=5.3;Te=2;He=3.1;Ge=0;Se=0.5;Ne=0.1;ae=1000;gammae=2;be=0.5;dt=2;Amp=11;f=0;'],
-['Forest_Fire_I','randomize','Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;'],
-['Forest_Fire_II','randomize','Aii=1;Aie=15.8;Ti=13;Hi=5.9;Gi=0;Si=0;Ni=0.1;ai=2;bi=7;Aee=9.8;Aei=5;Te=2;He=2.9;Ge=0;Se=0.6;Ne=0.2;ae=1000;gammae=2;be=1;dt=1.7;Amp=11;f=0;'],
-['flicker','randomize','dt=1.0;Te=10.0;Ti=20.0;Aei=8.5;Aii=3.0;Aee=10.5;Aie=12.0;Hi=3.5;He=2.0;Ni=0.0;Ne=0.0;Gi=0.0;Ge=1.0;bi=0.0;be=0.0;Amp=0.6;f=6.8;Se=1;Si=2;ai=1;ae=1;'],
+['flicker','randomize','dt=1.0;Te=10.0;Ti=20.0;Aei=8.5;Aii=3.0;Aee=10.5;Aie=12.0;Hi=3.5;He=2.0;Ni=0.0;Ne=0.0;Gi=0.0;Ge=1.0;bi=0.0;be=0.0;Amp=0.6;Str=0.0;f=6.8;Se=1;Si=2;ai=1;ae=1;'],
 ['Psychedelic','randomize','Aii=13;Aei=14.5;Ti=12.5;Hi=3.5;Gi=0;Si=2.9;Ni=0;ai=100;bi=0;Aee=16.1;Aie=13.7;Te=4;He=3.1;Ge=0;Se=2;Ne=.75;ae=50;be=0;dt=1;Amp=0;f=0;'],
 ['Rare_Waves','randomize','Aii=13;Aie=14.5;Ti=13;Hi=3.5;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=17.2;Aei=13.7;Te=4;He=3.1;Ge=0;Se=3;Ne=1;ae=50;be=1.3;dt=1;Amp=0;f=0;'],
 ['Oscillators','randomize','Aii=0;Aie=5;Ti=20;Hi=2.5;Gi=0;Si=1;Ni=0.5;ai=100;bi=0;Aee=8;Aei=5;Te=10;He=1;Ge=10;Se=1;Ne=0.5;ae=100;be=1;dt=1;Amp=0;f=6.8;'],
-['Chaos','randomize','Aii=11.7;Aie=20;Ti=36;Hi=4.4;Gi=0.3;Si=1;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Se=3;Ne=.1;ae=50;be=1;dt=1;Amp=0;f=6.8;'],
+['Chaos','randomize','Aii=5.6;Aie=17.8;Ti=16.5;Hi=4;Gi=0.3;Si=0.8;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=4;He=2.9;Ge=0.6;Se=0.8;Ne=0;ae=50;be=0.3;dt=1;Amp=0;f=6.8;'],
 ['Prickles','randomize','Aii=11.7;Aie=20;Ti=80;Hi=0.6;Gi=0.3;Si=5;Ni=0;ai=12;bi=0;Aee=15.5;Aei=10;Te=5;He=2.2;Ge=0.6;Se=1;Ne=1;ae=4;be=1.4;dt=1;Amp=0;f=6.8;'],
 ['Goldfish','randomize','Aii=11.7;Aie=20;Ti=80;Hi=0.6;Gi=0.3;Si=5;Ni=0;ai=12;bi=0;Aee=15.5;Aei=10;Te=5;He=2.2;Ge=0.6;Se=1;Ne=1;ae=140;be=2.8;dt=1.4;Amp=0;f=6.8;'],
 ['Canard Chaos','randomize','Aii=0;Aie=20;Ti=20;Hi=3.7;Gi=0.3;Si=0.7;Ni=0;ai=12;bi=0.6;Aee=14.1;Aei=10;Te=5;He=1.8;Ge=0.6;Se=0.7;Ne=.1;ae=100;be=0.5;dt=1;Amp=0;f=6.8;'],
-['Oscillate','randomize','Aii=0;Aie=2.74;Ti=1.9;Hi=1.2;Gi=0;Si=.1;Ni=0;ai=9;bi=0;Aee=8;Aei=5.1;Te=1;He=0.1;Ge=0;Se=2;Ne=0.2;ae=200;be=2.2;dt=1;Amp=0;f=6.8;'],
-['Mycelium','randomize','Aii=0;Aie=5;Ti=4;Hi=2.1;Gi=0.3;Si=2.6;Ni=0;ai=12;bi=1.1;Aee=12.6;Aei=9.6;Te=1;He=1.7;Ge=0.6;Se=.8;Ne=0.4;ae=1000;gammae=50;be=4.5;dt=1;Amp=0;f=6.8;'],
-['?','randomize','Aii=0;Aie=5;Ti=4;Hi=2.1;Gi=0.3;Si=2.6;Ni=0;ai=12;bi=1.1;Aee=12.6;Aei=9.6;Te=1;He=1.7;Ge=0.6;Se=.8;Ne=0.4;ae=1000;gammae=50;be=5.5;dt=1;Amp=0.3;f=50;'],
-['Beautiful_Chaos','randomize','Aii=6;Aie=14.3;Ti=50;Hi=4.7;Gi=0;Si=0.1;Ni=0.1;ai=1;bi=0;Aee=8.6;Aei=11.3;Te=3.2;He=2.3;Ge=1;Se=0.8;Ne=0.1;ae=1;gammae=100;be=0;dt=1;Amp=0;f=6.8;'],
-['Periodic_and_Homoclinic','randomize','Aii=7.3;Aie=21.3;Ti=10;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.2;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.1;Amp=0;f=6.8;'],
-['Periodic_and_Homoclinic_II','randomize','Aii=7.3;Aie=21.3;Ti=8;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.1;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.5;Amp=0;f=6.8;'],
-['Blink','randomize','Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;'],
-['Pretty','randomize','Aii=0;Aie=3.3;Ti=1.9;Hi=1.7;Gi=0;Si=0.9;Ni=0;ai=9;bi=0;Aee=8.9;Aei=5.7;Te=1;He=1.4;Ge=0;Se=0.8;Ne=0.1;ae=20;gammae=1;be=0.9;dt=0.1;Amp=8.6;f=6.5;'],
-['SNIC','randomize','Aii=6;Aie=18;Ti=5.8;Hi=7.6;Gi=0;Si=4.8;Ni=0;ai=2.7;bi=0;Aee=11.9;Aei=5.3;Te=2;He=3.6;Ge=0;Se=3;Ne=0.8;ae=1000;gammae=2;be=0;dt=1;Amp=0;f=0;'],
-['SNIC_Localized','randomize','Aii=7.9;Aie=18;Ti=5.8;Hi=7.5;Gi=0;Si=5;Ni=0;ai=2.7;bi=0;Aee=10;Aei=5.3;Te=2;He=3.5;Ge=0;Se=2;Ne=1.175;ae=1000;gammae=2;be=0;dt=0.7;Amp=0;f=0;'],
-['Quasicycles','randomize','Aii=0;Aie=5.5;Ti=25;Hi=2;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=8.5;Aei=5;Te=4;He=1.9;Ge=10;Se=0.8;Ne=0.7;ae=100;gammae=100;be=0;dt=1;Amp=0;f=6.8;'],
-['Quasicycles 2','randomize','Aii=0;Aie=5.5;Ti=25;Hi=2;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=8.5;Aei=5;Te=4;He=1.9;Ge=10;Se=8;Ne=0.4;ae=100;gammae=100;be=0;dt=2.9;Amp=0;f=6.8;'],
-]
+['Oscillate','randomize','Aii=0;Aie=2.74;Ti=1.9;Hi=1.2;Gi=0;Si=.1;Ni=0;ai=9;bi=0;Aee=8;Aei=5.1;Te=1;He=0.1;Ge=0;Se=2;Ne=0.2;ae=200;be=2.2;dt=1;Amp=0;f=6.8;']
+];
 
 function main() {
     console.log('Initializing...');
@@ -610,55 +458,44 @@ function main() {
     var Ti  = null;   // Inhibitory population time constant (ms)
     var Se  = null;   // Excitatory population spread
     var Si  = null;   // Inhibitory population spread
-    var Aee = null;   // E-E coupling Aeight
-    var Aie = null;   // Excitation of Inhibitory coupling Aeight
-    var Aei = null;   // Inhibition of Excitatory coupling Aeight
-    var Aii = null;   // I-I coupling Aeight
+    var Aee = null;  // E-E coupling Aeight
+    var Aie = null;  // Excitation of Inhibitory coupling Aeight
+    var Aei = null;  // Inhibition of Excitatory coupling Aeight
+    var Aii = null;  // I-I coupling Aeight
     var He  = null;   // Bias in E cell synaptic input
     var Hi  = null;   // Bias in I cell synaptic input
     var Ne  = null;   // Noise level (uniform) in E cells
     var Ni  = null;   // Noise level (uniform) in I cells
-    var f   = null;   // Stim frequency Hz
+    var f   = null;    // Stim frequency Hz
     var Ge  = null;   // Input drive to E cells
-    var Amp = null;   // Amplitude of stimulus
+    var Amp = null;  // Amplitude of stimulus
     var Gi  = null;   // Input drive to I cells
     var St  = null;   // Sinusoidal input stimulus is thresholded
     var ai  = null;   // Timescale of inhibitory adaptation
     var ae  = null;   // Timescale of excitatory adaptation
-    var gammae = 100.;  // Timescale of excitatory adaptation activation
     var bi  = null;   // Strength of Inhibitory adaptation
     var be  = null;   // Strength of Excitatotu adaptation
-    
-    var tskip      = 1;   // Frames to skip between drawing
-    var stimsize   = 0.3; // Size of stimulation spot
-    var stimradius = 0.7; // Radial displacement of simulation spot
-    var bradius    = 0.5; // boundary mask radius
-    var bhardness  = 0.75; // boundary hardness 
-    
-    var Str = 0.5;
 
     var running = 0;
 
     // Simulus
     function heav(z) {return z<.0?.0:z==.0?.5:1.;}
-    //function Stim(t) {return heav(Math.sin(2*Math.PI*t*f/1000.)-Str)*Amp;}
-    function Stim(t) {return (Math.sin(2*Math.PI*t*f/1000.)-Str)*Amp;}
+    function Stim(t) {return heav(Math.sin(2*Math.PI*t*f/1000.)-Str)*Amp;}
 
     // bit of a hack
     gl.width = gl.height = 256;
 
-    var clip_mode = gl.GL_CLAMP_TO_EDGE; //g.REPEAT
-    var temp1  = newBasicFramebuffer(gl,{wrap : clip_mode, size:256});
-    var temp2  = newBasicFramebuffer(gl,{wrap : clip_mode, size:256});
-    var U      = newBasicFramebuffer(gl,{wrap : clip_mode, size:256});
-    var V      = newBasicFramebuffer(gl,{wrap : clip_mode, size:256});
-    var UC     = newBasicFramebuffer(gl,{wrap : clip_mode, size:256});
-    var noise  = newBasicFramebuffer(gl,{wrap : clip_mode, size:256});
-    var hist   = newBasicFramebuffer(gl,{wrap : clip_mode, size:256});
+    var temp1  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
+    var temp2  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
+    var U      = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
+    var V      = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
+    var UC     = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
+    var noise  = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
+    var hist   = newBasicFramebuffer(gl,{wrap : gl.REPEAT, size:256});
     var dohist = getRasterProgram(gl,'histogram');
     var hblur  = GPUGaussianBlur(gl,5.0);
     var copy   = GPUcopy(gl,256,256);
-    var blur   = GPUGaussianMultiBlur16(gl,0.5);
+    var blur   = GPUGaussianMultiBlur16(gl,1,2);
     var gpurng = GPUNoise(gl);
     var rand   = WeakRNG();
     // compiled later after initialization
@@ -666,7 +503,7 @@ function main() {
     var adapt_kernel;
     var color;
     randomize();
-    
+
     /** Put parameters in kernel at compile time to take advantage
      *  of optimizations.
      */
@@ -696,12 +533,6 @@ function main() {
             Gi : Gi,  // Simulation gain for i cells
             Ne : Ne,  // Noise level (uniform) in E cells
             Ni : Ni,  // Noise level (uniform) in I cells
-            
-            stimsize   : 0.5*(1/(.15*stimsize))*(1/(.15*stimsize)),
-               //= 0.3; // Size of stimulation spot
-            stimradius : stimradius, //= 0.7; // Radial displacement of simulation spot
-            bradius    : 1.0*bradius,    //= 0.9; // boundary mask radius
-            bhardness  : 10+Math.tan(bhardness*1.5707),  //= 0.5; // boundary hardness 
         })[0];
         wc_kernel = buildRasterProgram(gl,
             wc_header+$('wc_kernel').text);
@@ -711,7 +542,6 @@ function main() {
             dt : dt,  // Euler integrator time step
             ai : ai,  // Timescale of inhibitory adaptation
             ae : ae,  // Timescale of excitatory adaptation
-            gammae : gammae, // Adaptation process activation timescale
         })[0];
         adapt_kernel = buildRasterProgram(gl,
             adapt_header+$('adapt_kernel').text);
@@ -819,7 +649,7 @@ function main() {
         var pdat = presets[i][2];
         var ps = document.createElement("div");
         ps.setAttribute("class","squarebutton");
-        ps.innerHTML = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzαβγδεφθιηκλμνπϟρστυωξζ'[i];
+        ps.innerHTML = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'[i];
         var st = document.createElement("div");
         st.setAttribute("class","info");
         st.innerHTML = name;
@@ -843,31 +673,29 @@ function main() {
     var timestep = 0;
     function iterate() {
         try {
-            for (var i=0; i<tskip; i++) {
-                gpurng(noise,temp1);
-                blur(U,temp1,UC);
-                var s = Stim(timestep*dt);
-                wc_kernel({
-                    Uin   :U,
-                    Vin   :V,
-                    Uconv :UC,
-                    noise :noise,
-                    s     :s,
-                    },temp1);
-                adapt_kernel({
-                    Uin   :U,
-                    Vin   :V
-                    },temp2);
-                copy(temp1,U);
-                copy(temp2,V);
-                timestep += 1;
-            }
+            gpurng(noise,temp1);
+            blur(U,temp1,UC);
+            var s = Stim(timestep*dt);
+            wc_kernel({
+                Uin   :U,
+                Vin   :V,
+                Uconv :UC,
+                noise :noise,
+                s     :s,
+                },temp1);
+            adapt_kernel({
+                Uin   :U,
+                Vin   :V
+                },temp2);
+            copy(temp1,U);
+            copy(temp2,V);
             dohist({Uin:U},temp1);
             hblur(temp1,temp2,temp1);
             color({
                 hist  :temp1,
                 Uin   :U,
                 Vin   :V});
+            timestep += 1;
         } catch (err) {
             console.log(err.message);
         }
