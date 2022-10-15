@@ -96,7 +96,7 @@ void main() {
     float s2 = s*exp(-(d*d)*100.0);
     
     d = length(XY-vec2(.5,.5));
-    float rr = 1./(1.+exp(-(d-.45)*150.));
+    float rr = 1./(1.+exp(-(d-.5)*150.));
     float m1 = exp(-(rr*rr));
 
     Ce = Ce*m1;
