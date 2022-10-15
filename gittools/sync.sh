@@ -41,7 +41,7 @@ git add -u :/
 # Commit using the message specified as first argument to this script
 
 echo "Git commit"
-git commit -m "$1"
+git commit -m "${1:-"..."}"
 
 # Synchronize with master on github
 echo "git pull"
