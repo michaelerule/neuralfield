@@ -515,20 +515,18 @@ This page requires JavaScript and access to the MathJax servers.<br/><br/>
     <div class="infotext">
         <h3 style="margin-top:0px;">Wave State Demonstration</h3>
         <span style="font-size:80%;">
-This page is part of the <a href="">github.com/michaelerule/neuralfield</a> repository, which collects various implementations of the Wilson-Cowan neural field and similar equations over the years. The project can be browsed as a website <a href="https://michaelerule.github.io/neuralfield/">here</a>.
-</br></br>
-We used these and similar equations to model <a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1002158">flicker-induced geometric hallucinations</a>, <a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005349">optogenetic stimulation in motor cortex</a>, and <a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007442">retinal waves</a>.
-        <br/>
-        <br/>
         <b>Note:</b> Beware forward-Euler integration, especially with limit cycles (where the error is always excitatory). 
         Do not set Δt larger than 1/10th the shortest time constant. 
         Values larger than 1/5th the shortest time consant are unstable.
-        <br/>
-        <br/>
         This code uses webGL shaders and encodes floats as 16-bit fixed point
         in an ad-hoc way. 
         Results are for demonstration and exploration only and not guaranteed
         to be especially accurate. 
+        <br/>
+        <br/>
+This page is part of the <a href="">github.com/michaelerule/neuralfield</a> repository, which collects various implementations of the Wilson-Cowan neural field and similar equations over the years. The project can be browsed as a website <a href="https://michaelerule.github.io/neuralfield/">here</a>.
+</br></br>
+We used these and similar equations to model <a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1002158">flicker-induced geometric hallucinations</a>, <a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005349">optogenetic stimulation in motor cortex</a>, and <a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007442">retinal waves</a>.
         </span>
         <br/>
         <div class="controltext" style="width:240px;">
