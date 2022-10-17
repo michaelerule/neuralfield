@@ -40,9 +40,9 @@ function get_parameters(id) {
         }
         // todo: do some validation and error handling
         parameters[name]={type:type,value:value};
-        console.log(parameters[name]);
+        //console.log(parameters[name]);
     }
-    console.log(parameters);
+    //console.log(parameters);
     return parameters;
 }
 

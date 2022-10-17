@@ -188,8 +188,8 @@ function GPUGaussianMultiBlur16(gl,sigmaRG,sigmaBA) {
         kernel[i*2+0] = kernelRG[i];
         kernel[i*2+1] = kernelBA[i];
     }
-    console.log(radius);
-    console.log(kernel);
+    //console.log(radius);
+    //console.log(kernel);
 
     var blur_x = buildRasterProgram(gl,__gpu_blur_kernel__,{
         K  : radius,

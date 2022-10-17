@@ -61,6 +61,17 @@ A {
     width:100px;
     float:right;
 }
+.axislabel {
+    position:absolute;
+    z-index:2;
+    text-align:center;
+    font-size:70%;
+    height:15px;
+    line-height:15px;
+}
+#linearreport {
+    font-size:120%;
+}
 .infotext {
     float:right;
     margin-left:10px;
@@ -68,6 +79,14 @@ A {
     width:190px;
     height:auto;
     font-size:80%;
+}
+.title {
+    position:absolute;
+    z-index:2;
+    text-align:center;
+    font-size:85%;
+    height:20px;
+    line-height:20px;
 }
 .control {
     text-align:right;
@@ -190,7 +209,7 @@ input[type=number] {-moz-appearance: textfield;}
 }
 /* make unselectable things that ought not be selected */
 .button, .control, .controls, .controlbox, .controltext, .button_container,
-#equation, #maincanvas, #canvasoverlay, .clickblocker, .overlay,
+#equation, #maincanvas, #canvasoverlay, .clickblocker, .overlay, #phaseoverlay,
 .squarebutton .info {
     -webkit-touch-callout: none;
     -webkit-user-select: none;

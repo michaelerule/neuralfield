@@ -59,7 +59,7 @@ function GPUNoise(gl) {
         var rng = WeakRNG();
         for (var i=0;i<L;++i)
             noise[i] = rng.uint8();
-        console.log(texture);
+        //console.log(texture);
         gl.bindTexture  (gl.TEXTURE_2D, texture);
         gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,W,H,
             gl.RGBA,gl.UNSIGNED_BYTE,noise);

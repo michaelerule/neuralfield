@@ -1,0 +1,1147 @@
+<html>
+<!-- Flicker javascript demo (c) Michael Rule 2015 -->
+<head>
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+<meta content="utf-8" http-equiv="encoding">
+<script src="../lib/colormaps.js"></script>
+<script src="../lib/gpgpu.js"></script>
+<script src="../lib/gpugaussian.js"></script>
+<script src="../lib/gpurand.js"></script>
+<script src="../lib/parameters.js"></script>
+<link rel="stylesheet" type="text/css" href="wc.css">
+<link rel="stylesheet" type="text/css" href="wcv2.css">
+<title>Wilson-Cowan on the GPU and in your browser</title>
+
+<!-- import the MathJax scripts -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript"
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+
+<script id="wc_kernel-parameters" type="x-fragment-parameters">
+// Note: this is not Javascript and these values are not
+// directly accessible to either the main function or the wilson-
+// cowan kernel below. These are type declarations, to be 
+// parsed by the parameters.js library, to help bridge the 
+// weakly-typed javascript with the strong typing of WebGLSL.
+sampler2D Uin;
+sampler2D Vin;
+sampler2D Uconv;
+sampler2D Uconv2;
+sampler2D noise;
+float dt;  // Euler integrator time step
+float Te;  // Excitatory population time constant (ms)
+float Ti;  // Inhibitory population time constant (ms)
+float Aee; // E-E coupling
+float Aie; // Excitation of Inhibitory coupling
+float Aei; // Inhibition of Excitatory coupling
+float Aii; // I-I coupling (local)
+float Wee; // E-E coupling (local)
+float Wie; // Excitation of Inhibitory coupling (local)
+float Wei; // Inhibition of Excitatory coupling (local)
+float Wii; // I-I coupling (local)
+float He;  // Bias in E cell synaptic input
+float Hi;  // Bias in I cell synaptic input
+float bi;  // Strength of Inhibitory adaptation
+float be;  // Strength of Excitatory adaptation
+float Ne;  // Noise level (uniform) in E cells
+float Ni;  // Noise level (uniform) in I cells
+float Gi;  // Gain on stimulation of i cells
+float Ge;  // Gain on stimulation of e cells
+float s;   // External stimulation
+float stimsize;   // Size of stimulation spot
+float stimradius; // Radial displacement of simulation spot
+float bradius;    // boundary mask radius
+float bhardness;  // boundary hardness 
+</script>
+<script id="wc_kernel" type="x-fragment">
+#define twopi 6.283185307179586
+#define F(x) (clamp((1./(1.+exp(-(x)))),0.,1.))
+vec2 EncodeFloatXY( float v ) {
+  // Fixed point float encoding ranges in (0,1)
+  v        = clamp(v,0.0,1.0);
+  v       -= 0.00000762951; //predictable rounding
+  vec2 enc = vec2(1.0, 255.0) * v;
+  enc      = fract(enc);
+  enc     -= enc.yy * vec2(1./255.,0.);
+  return enc;
+}
+float DecodeFloatXY( vec2 xy ) {
+  return dot( xy, vec2(1.,1./255.) );
+}
+void main() {
+    vec2 XY   = gl_FragCoord.xy/vec2(W,H);
+    vec4 U    = texture2D(Uin  , XY); // raw fields
+    vec4 V    = texture2D(Vin  , XY); // adaptation fields
+    vec4 Uc   = texture2D(Uconv, XY); // convolved fields
+    vec4 Uc2  = texture2D(Uconv2,XY); // convolved fields
+
+    vec4 n    = texture2D(noise, XY)*0.999+0.0001; // uniform noise
+    vec2 R    = sqrt(-2.*log(n.xy));  // Transform uniform noise
+    vec2 T    = twopi*n.zw;           // into Gaussian using Box-
+    vec4 N    = vec4(R*cos(T),R*sin(T))*sqrt(dt); // Muller transform.
+
+    // Unpack state from texture information
+    // using two channels per float (16 bit fixed point)
+    float Ce = DecodeFloatXY(Uc.xy);
+    float Ci = DecodeFloatXY(Uc.zw);
+    float C2e = DecodeFloatXY(Uc2.xy);
+    float C2i = DecodeFloatXY(Uc2.zw);
+    float Ue = DecodeFloatXY(U.xy);
+    float Ui = DecodeFloatXY(U.zw);
+    float Ve = DecodeFloatXY(V.xy);
+    float Vi = DecodeFloatXY(V.zw);
+
+    float  d = length(XY-vec2(0.5,0.5)+vec2(0.5,0.5)*stimradius*bradius);
+    float s2 = s*exp(-(d*d)*stimsize);
+    
+    d = length(XY-vec2(.5,.5));
+    float rr = 1./(1.+exp(-(d-bradius)*bhardness));
+    float m1 = exp(-(rr*rr));
+
+    Ce = Ce*m1;
+    Ue = Ue*m1;
+
+    float Ae  = F(Wee*C2e-Wei*C2i+Aee*Ce-Aei*Ci-He+Ge*s2-Ve*be+Ne*N.x);
+    float Ai  = F(Wie*C2e-Wii*C2i+Aie*Ce-Aii*Ci-Hi+Gi*s2-Vi*bi+Ni*N.y);
+    float Ue_out  = Ue + (Ae - Ue)*(dt/Te);
+    float Ui_out  = Ui + (Ai - Ui)*(dt/Ti);
+    gl_FragColor = vec4(
+        EncodeFloatXY(Ue_out),
+        EncodeFloatXY(Ui_out));
+}
+</script>
+
+
+<script id="adapt_kernel-parameters" type="x-fragment-parameters">
+sampler2D Uin;
+sampler2D Vin;
+float dt;  // Euler integrator time step
+float ai;  // Timescale of inhibitory adaptation
+float ae;  // Timescale of excitatory adaptation
+float gammae;
+</script>
+<script id="adapt_kernel" type="x-fragment">
+#define twopi 6.283185307179586
+#define F(x) (1./(1.+exp(-(x))))
+vec2 EncodeFloatXY( float v ) {
+  v = clamp(v,0.,1.);
+  v -= 0.00000762951;
+  vec2 enc = vec2(1.0, 255.0) * v;
+  enc = fract(enc);
+  enc.x -= enc.y/255.0;
+  return enc;
+}
+float DecodeFloatXY( vec2 xy ) {
+  return dot( xy, vec2(1.,1./255.) );
+}
+void main() {
+    vec2 XY     = gl_FragCoord.xy/vec2(W,H);
+    vec4 U      = texture2D(Uin  , XY); // raw fields
+    vec4 V      = texture2D(Vin  , XY); // adaptation fields
+    float Ue_in = DecodeFloatXY(U.xy);
+    float Ui_in = DecodeFloatXY(U.zw);
+    float Ve_in = DecodeFloatXY(V.xy);
+    float Vi_in = DecodeFloatXY(V.zw);
+    float dVe   = (Ue_in - Ve_in);
+    float Ve    = 
+        Ue_in > Ve_in 
+            ? Ve_in + dVe*(dt/gammae)
+            : Ve_in + dVe*(dt/ae);
+    float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
+    gl_FragColor = vec4(
+        EncodeFloatXY(Ve),
+        EncodeFloatXY(Vi));
+}
+</script>
+
+
+<script id="histogram" type="x-shader/x-fragment">
+uniform sampler2D Uin;
+float DecodeFloatXY( vec2 xy ) {
+    return dot( xy, vec2(1.,1./255.) );
+}
+void main() {
+    vec2  zm = gl_FragCoord.xy/vec2(W,H);
+    vec4  U  = texture2D(Uin  ,zm);
+    vec4  d  = vec4(1.0);
+    for (int y=0; y<H; y+=(H/16)) {
+        for (int x=0; x<W; x+=(W/16)) { 
+            // Sample location on screen
+            vec2 z  = clamp(vec2(float(x),float(y))/vec2(W,H)+zm,0.2,1.-0.2);
+            U       = texture2D(Uin  ,z);
+            // Distance between pixel state and histogram bin center
+            float e = zm.x-DecodeFloatXY(U.xy);
+            float i = zm.y-DecodeFloatXY(U.zw);
+            float dd = e*e+i*i;
+            // If state is close to (within) this bin, increment
+            if (dd<0.0005) {
+                d *= 0.999;//75;
+            }
+        }
+    }
+    gl_FragColor = pow(1.0-pow(d,vec4(10.)),vec4(0.2));
+}
+</script>
+
+<script id="colormap-parameters" type="x-fragment-parameters">
+sampler2D Uin;
+sampler2D Vin;
+sampler2D hist; //;
+float Aee; // E-E coupling
+float Aie; // Excitation of Inhibitory coupling
+float Aei; // Inhibition of Excitatory coupling
+float Aii; // I-I coupling
+float Wee; // E-E coupling (local)
+float Wie; // Excitation of Inhibitory coupling (local)
+float Wei; // Inhibition of Excitatory coupling (local)
+float Wii; // I-I coupling (local)
+float Se;  // Excitatory standard deviation
+float Si;  // Inihibotry standard deviation
+float Sl;  // Local standard deviation
+float Te;  // Time constant E
+float Ti;  // Time constant I
+float He;  // Bias in E cell synaptic input
+float Hi;  // Bias in I cell synaptic input
+float bi;  // Strength of Inhibitory adaptation
+float be;  // Strength of Excitatory adaptation
+float Ue0; // Fixed point E
+float Ui0; // Fixed point I
+</script>
+<script id="colormap" type="x-shader/x-fragment">
+#define PADFACTOR 1.0
+#define OVERFLOW 0.1
+#define twopi 6.283185307179586
+#define F(x) (1./(1.+exp(-(x))))
+#define dF(x) ((F(x))*(F(-(x))))
+float DecodeFloatXY( vec2 xy ) {
+  return dot( xy, vec2(1.,1./255.) );
+}
+vec2 dU_steady_state(vec2 u) {
+    return vec2(
+        F((Wee+Aee-be)*u.x-(Wei+Aei)*u.y-He)-u.x,
+        F((Wie+Aie)*u.x-(bi+Wii+Aii)*u.y-Hi)-u.y);
+}
+vec2 dU_no_adaptation(vec2 u) {
+    return vec2(
+        F((Wee+Aee)*u.x-(Wei+Aei)*u.y-He)-u.x,
+        F((Wie+Aie)*u.x-(Wii+Aii)*u.y-Hi)-u.y);
+}
+vec2 dU_full_adaptation(vec2 u) {
+    return vec2(
+        F((Wee+Aee)*u.x-be-(Wei+Aei)*u.y-He)-u.x,
+        F((Wie+Aie)*u.x-bi-(Wii+Aii)*u.y-Hi)-u.y);
+}
+vec4 eigvals(vec2 u) {
+    //float w   = twopi/(u.x*256.0);
+    // Bigger number cover wider span of axis
+    // sqrt(pi/256) 0.11077836568159474
+    //float w = sqrt(u.x)*0.11077836568159474;
+    float w = u.x;
+    
+    float se  = Se*w;
+    float si  = Si*w;
+    float s2  = Sl*w;
+    float Re  = exp(-0.5*se*se);
+    float Ri  = exp(-0.5*si*si);
+    float R2  = exp(-0.5*s2*s2);
+    float dUe = dF((Wee+Aee)*Ue0 - be*Ue0 - (Wei+Aei)*Ui0 - He);
+    float dUi = dF((Wie+Aie)*Ue0 - bi*Ui0 - (Wii+Aii)*Ui0 - Hi);
+    float a = (  (Wee*R2 + Aee * Re) * dUe - be * dUe - 1.0)/Te;
+    float b = ( -(Wei*R2 + Aei * Ri) * dUe )/Te;
+    float c = (  (Wie*R2 + Aie * Re) * dUi )/Ti;
+    float d = ( -(Wii*R2 + Aii * Ri) * dUi - bi * dUi - 1.0)/Ti;
+    float r = 0.5*(a+d);
+    float D = (a+d)*(a+d)/4.0 - (a*d-b*c);
+    
+    // Real part determins stability
+    float realdelta = sqrt(max(D,0.0));
+    float r1 = r+realdelta;
+    float r2 = r-realdelta;
+    // D determines frequency when negative
+    float imdelta = sqrt(max(-D,0.0));
+    return vec4(
+        F(2.*(r1*Te)) - u.y, 
+        F(2.*(r2*Te)) - u.y, 
+        F(2.*( imdelta*Te)) - u.y, 
+        F(2.*(-imdelta*Te)) - u.y
+    );
+}
+float yticks(float y) {
+    return sin(0.5*log(y/(1.-y))*twopi);
+}
+void main() {
+    vec2  XY = gl_FragCoord.xy/vec2(W,H);
+    vec2  dx = vec2(PADFACTOR*1.0/float(W),0.0);
+    vec2  dy = vec2(0.0,PADFACTOR*1.0/float(H));
+    vec2  zm = mod(XY,1.);
+    vec4  U  = texture2D(Uin  ,zm);
+    vec4  V  = texture2D(Vin  ,zm);
+    float Ue = DecodeFloatXY(U.xy);
+    float Ui = DecodeFloatXY(U.zw);
+    float Ve = DecodeFloatXY(V.xy);
+    float Vi = DecodeFloatXY(V.zw);
+    if (XY.y>1.) {
+        // Top half of screen: draw neural fields as colors
+        vec4 c = XY.x<1.
+            ? vec4(Ue,Ui,abs(Ue-Ui)*3.0,1.0)
+            : vec4(Vi,Ve,abs(Ve-Vi)*3.0,1.0);
+        gl_FragColor = c;
+    } else {
+        // Bottom half of screen: Histograms and nullclines
+        zm = (zm-0.5)*PADFACTOR+0.5;
+        if (zm!=clamp(zm,0.,1.)) {gl_FragColor = vec4(0.0); return;}
+    
+        zm = zm*(1.+2.*OVERFLOW)-OVERFLOW;
+        dx = dx*(1.+2.*OVERFLOW);
+        dy = dy*(1.+2.*OVERFLOW);
+        
+        // Draw nullclines
+        if (XY.x<1.) {
+            vec2 zm2 = clamp(zm,0.,1.);
+            vec4 d   = (zm.x==zm2.x&&zm.y==zm2.y)? texture2D(hist,clamp(zm,0.,1.))*1.: vec4(0.);
+            // Nullclines assuming steady-state adaptation
+            vec2 dU      = dU_steady_state(zm);
+            vec2 dUy     = dU_steady_state(zm+dy);
+            vec2 dUx     = dU_steady_state(zm+dx);
+            vec2 signs   = vec2(lessThanEqual(min(dU*dUx,dU*dUy),vec2(0.0,0.0)));
+            vec4 c2      = vec4(signs.yx,0.0,0.0);
+            vec4 c3      = vec4(clamp(signs.y+signs.x,0.0,1.0));
+            gl_FragColor = d + c3*(c2-d);
+        } else if (XY.x>1.) {
+            vec2 zm2   = clamp(zm,0.,1.);
+            if (zm.x==zm2.x&&zm.y==zm2.y) { 
+                vec4 dU    = eigvals(zm);
+                vec4 dUy   = eigvals(zm+dy);
+                vec4 dUx   = eigvals(zm+dx);
+                vec4 signs = vec4(lessThanEqual(min(dU*dUx,dU*dUy),vec4(0.,0.,0.,0.)));
+                gl_FragColor.rgb = 
+                    vec3(.8,.2,.6)*min(signs.x+signs.y,1.0) + 
+                    vec3(.2,.8,.6)*min(signs.z+signs.w,1.0) + 
+                    // Draw sigmoid-wrapped y ticks
+                    vec3(.3,.3,.3)*float(yticks(zm.y)*yticks(zm.y+dy.y)<=0.&&abs(zm.y-.5)<.48)+
+                    // Draw zero line
+                    vec3(1.,1.,1.)*float((zm.y<0.5)&&(zm.y+dy.y>=0.5));
+            }
+        }
+    }
+}
+</script>
+</head>
+
+<body onload="javascript:waitForMathJax()">
+<div class="overlay" style="margin:auto auto; height:100%; width:100%; font-size:80%;" id="hidingframe">
+<div class="outer">
+<div class="middle">
+<center>
+Please wait while the simulation loads<br/>
+This page requires JavaScript and access to the MathJax servers.<br/><br/>
+<img src="loader.gif"/>
+</center>
+</div>
+</div>
+</div>
+
+<div class="clickblocker" style="margin:auto auto; height:100%; width:100%;" id="clickblock"> </div>
+
+<div class="outer" id="mainframe">
+<div class="middle">
+<div id='canvasdiv'>
+    <div class="controlbox" style="font-size:80%;position:relative;">
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="controltext">
+                    Inhibitory
+                </div>
+            </div>
+            <div class="controls">
+                <div class="controltext">
+                    Excitatory
+                </div>
+            </div>
+        </div>
+        <div class="controltext">
+            Local coupling strengths ($\sigma_l$)
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$w_{ii}$<input type="number" step="0.1" max="100" min="0" name="Wii" value="0.0"/></div>
+                <div class="control">$w_{ie}$<input type="number" step="0.1" max="100" min="0" name="Wie" value="0.0"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$w_{ee}$<input type="number" step="0.1" max="100" min="0" name="Wee" value="0.0"/></div>
+                <div class="control">$w_{ei}$<input type="number" step="0.1" max="100" min="0" name="Wei" value="0.0"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Spatial spread
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$\sigma_i$<input type="number" step="0.1" max="100" min="0" name="Si" value="1.5"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$\sigma_e$<input type="number" step="0.1" max="100" min="0" name="Se" value="0.6"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$\sigma_l$<input type="number" step="0.1" max="100" min="0" name="Sl" value="2.0"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Lateral coupling strengths
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$a_{ii}$<input type="number" step="0.1" max="100" min="0" name="Aii" value="3.0"/></div>
+                <div class="control">$a_{ie}$<input type="number" step="0.1" max="100" min="0" name="Aie" value="12.0"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$a_{ee}$<input type="number" step="0.1" max="100" min="0" name="Aee" value="10.0"/></div>
+                <div class="control">$a_{ei}$<input type="number" step="0.1" max="100" min="0" name="Aei" value="8.5"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Time constants (ms)
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$\tau_i$<input type="number" step="0.1" max="100" min="0" name="Ti" value="20.0"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$\tau_e$<input type="number" step="0.1" max="100" min="0" name="Te" value="10.0"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Thresholds
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$\theta_i$<input type="number" step="0.2" max="100" min="-100" name="Hi" value="3.5"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$\theta_e$<input type="number" step="0.2" max="100" min="-100" name="He" value="2.0"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Stimulus gain
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$g_i$<input type="number" step="0.1" max="100" min="-100" name="Gi" value="0.0"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$g_e$<input type="number" step="0.1" max="100" min="-100" name="Ge" value="0.8"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Noise
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$N_i$<input type="number" step="0.1" max="100" min="0" name="Ni" value="0.1"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$N_e$<input type="number" step="0.1" max="100" min="0" name="Ne" value="0.1"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Adaptation
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$\alpha_i$<input type="number" step="0.1" max="1000" min="0" name="ai" value="5.0"/></div>
+                <div class="control">$\beta_i$<input type="number" step="0.1" max="100"  min="-100" name="bi" value="0.0"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$\alpha_e$<input type="number" step="0.1" max="1000" min="0" name="ae" value="5.0"/></div>
+                <div class="control">$\gamma_e$<input type="number" step="0.1" max="1000" min="0" name="gammae" value="5.0"/></div>
+                <div class="control">$\beta_e$<input type="number" step="0.1" max="100"  min="-100" name="be" value="0.0"/></div>
+            </div>
+        </div>
+        <br>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="controltext">
+                    Stimulation
+                </div>
+                <div class="control">$A$<input type="number" step="0.1" max="100"  min="-100" name="Amp" value="0.5"/></div>
+                <div class="control">$f$<input type="number" step="1" max="1000" min="0" name="f" value="50.0"/></div>
+            </div>
+            <div class="controls">
+                <div class="controltext">
+                    Time stepping
+                </div>
+                <div class="control">$\Delta t$<input type="number" step="0.1" max="100"  min="0" name="dt" value="2.0"/></div>
+                <div class="control">skip<input type="number" step="1" max="100"  min="0" name="tskip" value="1"/></div>
+            </div>
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls" style="width:200px;">
+                <div class="control">size<input type="number" step="0.1" max="1" min="0.1" name="stimsize" value="0.3"/></div>
+                <div class="control">location<input type="number" step="0.1" max="1" min="0" name="stimradius" value="0.7"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Boundary
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls" style="width:200px;">
+                <div class="control">radius<input type="number" step="0.05" max="1"  min="0" name="bradius" value="0.45"/></div>
+                <div class="control">hardness<input type="number" step="0.05" max="1"  min="0" name="bhardness" value="0.5"/></div>
+            </div>
+        </div>
+            
+        <div class="controltext">
+            Presets
+        </div>
+        <div class="button_container" id="presets">
+        </div>
+
+    </div>
+
+    <div style="position:relative;">
+        <canvas id='maincanvas' style="position:absolute; left:200px; z-index: 1;"> 
+            This application relies on the HTML5 Canvas element and Javascript. 
+            If you have Javascript disabled, try re-enabling it for this page. 
+        </canvas>
+        
+        <!-- title for plot on top left -->
+        <div class="title"style='bottom:-20px;left:200px;width:256px;'>
+            Firing rate variables <b><font color="#f44">$U_e$</font>, <font color="#4f4">$U_i$</font>, <font color="#88f">$3|U_e-U_i|$</font></b>
+        </div>
+        <!-- title for plot on top right -->
+        <div class="title"style='bottom:-20px;left:456px;width:256px;'>
+            Adaptation variables <b><font color="#f44">$U_e$</font>, <font color="#4f4">$U_i$</font>, <font color="#88f">$3|U_e-U_i|$</font></b>
+        </div>
+        
+        
+        <!-- title for plot on bottom left -->
+        <div class="axislabel"style='bottom:-276px;left:200px;width:256px;'>
+            Phase space (steady-state $V_{e,i}$)
+        </div>
+        <!-- x-axis label for plot on bottom left -->
+        <div class="axislabel" style='bottom:-512px;left:200px;width:256px;'>
+            <b><font color="#0f0">E-cell</font></b> firing rate
+        </div>
+        <!-- y-axis label for plot on bottom left -->
+        <div class="axislabel" style='bottom:-394px;left:82px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);'>
+            <b><font color="#F00">I-cell</font></b> firing rate
+        </div>
+        <!-- y-axis label for plot on bottom left 512-.1/(1.2/256) -->
+        <div class="axislabel" style='bottom:-496px;left:82px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);'>
+            0
+        </div>
+        <!-- y-axis label for plot on bottom left 512-1.1/(1.2/256) -->
+        <div class="axislabel" style='bottom:-287px;left:82px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);'>
+            1
+        </div>
+        <!-- x-axis label for plot on bottom left 200+.1/(1.2/256) = 221.33333333333334 -->
+        <div class="axislabel" style='bottom:-512px;left:221px;'>
+            0
+        </div>
+        <!-- x-axis label for plot on bottom left 200+1.1/(1.2/256) = 434.6666666666667 -->
+        <div class="axislabel" style='bottom:-512px;left:434.7px;'>
+            1
+        </div>
+        
+        
+        <!-- title for plot on bottom right -->
+        <div class="axislabel" style='bottom:-276px;left:456px;width:256px;'>
+            Eigenvalues at selected point: <b><font color="#c39">Real</font>; <font color="#3c9">Imaginary</font></b>
+        </div>
+        <!-- x-axis label for plot on bottom right -->
+        <div class="axislabel" style='bottom:-512px;left:456px;width:256px;'>
+            Angular spatial frequency (1/pixels)
+        </div>
+        <!-- y-axis label for plot on bottom right -->
+        <div class="axislabel" style='bottom:-394px;left:338px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);'>
+            Temporal frequency; Lines: multiples of $1/\tau_e$
+        </div>
+        
+        <div id='canvasoverlay' style="position:absolute; left:200px; z-index:4;">
+            <div style="display: table-cell; vertical-align: middle;">
+            Click to start
+            </div>
+        </div>
+
+        <div id="equation" style="position:absolute;top:512;left:200;">
+            \[\textrm{E-cells:  } 
+            \tau_e \dot{U_e} = -U_e + f\left[
+            (w_{ee} K_l + a_{ee} K_e) \star U_e 
+            - (w_{ie} K_l + a_{ie}   K_i) \star U_i 
+            - \theta_e + g_e S(t) - \beta_e V_e\right]\]
+            \[\textrm{I-cells:  } 
+            \tau_i \dot{U_i} = -U_i + f\left[ 
+            (w_{ei}K_l +a_{ei} K_e) \star U_e 
+            - (w_{ii}K_l + a_{ii} K_i) \star U_i 
+            - \theta_i + g_i S(t) - \beta_i V_i \right]\]
+            \[\textrm{E-cell adaptation:  } \tau_{ve} \dot{V_e} = U_e - V_e,\,\,
+             \tau_{ve} = \begin{cases} \alpha_e & \text{if }V_e< U_e \\ 
+             \gamma_e & \text{if }V_e\ge U_e\end{cases} \]
+            \[\textrm{I-cell adaptation:  } \alpha_i \dot{V_i} = U_i - V_i \]
+            \[\textrm{Interaction kernels (normalized to 1):  } K_{e,i,l}(x,y) 
+            \propto \exp\left(\frac{1}{2} \frac{x^2}{\sigma_{e,i,l}^2}
+            +\frac{1}{2} \frac{y^2}{\sigma_{e,i,l}^2}\right)\]
+        </div>
+
+        <!-- Invisible overlay of bottom left phase plane to detect mouse over -->
+        <div id='phaseoverlay' style='position:absolute;bottom:-512px;left:200px;width:256px;height:256px;z-index:3;background:#00000000;'>
+            <div id="lilbox" style="position:relative;width:10px;height:10px;background:#00000000;border:solid 1px #777;z-index:5;left:0px;top:0px;pointer-events:none;">
+            </div>
+        </div>
+
+    </div>
+
+    <!-- just here for padding -->
+    <div class="infotext">
+        <h3 style="margin-top:0px;">Wave State Demonstration</h3>
+        <span style="font-size:80%;">
+            This page is part of the 
+            <a href="">github.com/michaelerule/neuralfield</a> repository, 
+            which collects various implementations of the Wilson-Cowan neural 
+            field and similar equations over the years. The project can be 
+            browsed as a website 
+            <a href="https://michaelerule.github.io/neuralfield/">here</a>.
+            </br></br>
+            We used these and similar equations to model 
+            <a href="journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1002158">
+            flicker-induced geometric hallucinations</a>, 
+            <a href="journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005349">
+            optogenetic stimulation in motor cortex</a>, and 
+            <a href="journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007442">
+            retinal waves</a>.
+            <br/>
+            <br/>
+            <b>Note:</b> Beware forward-Euler integration, especially with 
+            limit cycles (where the error is always excitatory). 
+            Do not set Δt larger than 1/10th the shortest time constant. 
+            Values larger than 1/5th the shortest time consant are unstable.
+            <br/>
+            <br/>
+            This code uses webGL shaders and encodes floats as 16-bit fixed point
+            in an ad-hoc way. 
+            Results are for demonstration and exploration only and not guaranteed
+            to be especially accurate. 
+        </span>
+        <br/>
+        <div class="controltext" style="width:240px;">
+        </div>
+        <div class="controltext" style="width:240px;">
+            Simulation
+        </div>
+        <div class="button_container">
+            <input class="button" type="button" value="Start"/>
+            <input class="button" type="button" value="Step"/>
+            <input class="button" type="button" value="Save"/>
+            <input class="button" type="button" value="Load"/>
+            <input class="button" type="button" value="Randomize"/>
+        </div>
+        <div class="controltext" style="width:240px;">
+            Local linearization report
+            <br/><br/>
+            <div id="linearreport" style="font-size:120%;">
+            </div>
+        </div>
+        
+        
+    </div>
+    
+</div>
+</div>
+</div>
+
+<script type="text/javascript">
+presets=[
+['Rasa wave explore 29', 'randomize',
+'Wii=0;Wie=4.7;Wee=8.2;Wei=4.5;Si=4;Se=10;Sl=0.5;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=15;dt=.2;tskip=20;stimsize=0.2;stimradius=0.6;bradius=0.25;bhardness=0.975;'],
+['Rasa wave explore 28', 'randomize', 'Wii=0;Wie=2;Wee=4;Wei=2;Si=2;Se=8;Sl=2;Aii=0;Aie=2;Aee=4;Aei=2;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.25;bhardness=0.95;'],
+['Rasa wave explore 27', 'randomize',
+'Sl=2.0;Wii=0;Wie=3;Wee=4;Wei=2;Si=7.2;Se=6;Aii=0;Aie=1;Aee=4;Aei=2;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.55;bhardness=0.95;'],
+['Rasa wave explore 26', 'randomize',
+'Sl=2.0;Wii=0;Wie=0;Wee=4;Wei=0;Si=0.1;Se=0.1;Aii=0;Aie=4;Aee=4;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.35;bhardness=0.95;'],
+['Rasa wave explore 25', 'randomize',
+'Sl=2.0;Wii=0;Wie=0;Wee=4;Wei=0;Si=0.5;Se=3;Aii=0;Aie=4;Aee=4;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.3;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
+['Rasa wave explore 24', 'randomize', 'Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Si=3;Se=5;Aii=0;Aie=4;Aee=8;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.3;stimradius=0.6;bradius=.5;bhardness=0.95;'],
+['Rasa wave explore 23', 'randomize', 'Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Si=1;Se=2;Aii=0;Aie=4;Aee=8;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.5;stimradius=0.6;bradius=.5;bhardness=0.95;'],
+['Rasa wave explore 22', 'randomize', 'Sl=2.0;Wii=0;Wie=0;Wee=8;Wei=0;Si=1;Se=2;Aii=0;Aie=4;Aee=0;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=0.2;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0;f=50;dt=0.05;tskip=10;stimsize=0.6;stimradius=0;bradius=1;bhardness=0.95;'],
+['Rasa wave explore 21', 'randomize','Sl=2.0;Wii=0.4;Wie=0;Wee=0.5;Wei=0;Aii=0;Aie=3.3;Aee=8.8;Aei=5.7;Ti=1.9;Te=1;Hi=1.85;He=1.6;Gi=0;Ge=0.2;Si=0.6;Se=2.3;Ni=0;Ne=0.1;ai=9;bi=0;ae=100;gammae=1;be=1.3;Amp=1;f=50;dt=0.05;tskip=10;stimsize=0.6;stimradius=0;bradius=1;bhardness=0.95;'],
+['Rasa wave explore 20', 'randomize','Sl=2.0;Wii=0;Wie=0;Wee=0.32;Wei=0;Aii=0;Aie=3.3;Aee=8.9;Aei=5.7;Ti=1.9;Te=1;Hi=1.7;He=1.4;Gi=0;Ge=0;Si=0.9;Se=0.8;Ni=0;Ne=0.1;ai=9;bi=0;ae=20;gammae=1;be=0.9;Amp=8.6;f=6.5;dt=0.1;tskip=10;stimsize=0.8;stimradius=0.6;bradius=1;bhardness=0.95;'],
+['Rasa wave explore 19', 'randomize','Sl=2.0;Wii=0;Wie=0;Wee=0.1;Wei=0;Aii=3.8;Aie=7;Aee=13.1;Aei=10.2;Ti=10.5;Te=8.2;Hi=1.9;He=1.8;Gi=0;Ge=1;Si=6.1;Se=12;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0.7;f=18;dt=0.5;tskip=10;stimsize=0.8;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
+['Rasa wave explore 18', 'randomize','Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Aii=7.9;Aie=18;Aee=10.4;Aei=5.3;Ti=5.8;Te=2;Hi=7.5;He=3.4;Gi=0;Ge=0;Si=5;Se=2;Ni=0;Ne=1.1;ai=2.7;bi=0.8;ae=1000;gammae=2;be=0.3;Amp=0;f=0;dt=0.7;tskip=10;stimsize=0.8;stimradius=0.6;bradius=1;bhardness=0.95;'],
+['Rasa wave explore 17', 'randomize','Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Aii=3.8;Aie=7;Aee=12.9;Aei=10.2;Ti=10.5;Te=9.4;Hi=1.9;He=1.8;Gi=0;Ge=1;Si=0.1;Se=8;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=-0.1;Amp=1;f=8;dt=0.5;tskip=10;stimsize=0.5;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
+['Rasa wave explore 16', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=3.5;Aie=6.8;Aee=13.5;Aei=9.6;Ti=10;Te=10;Hi=1.6;He=2;Gi=0;Ge=1;Si=.1;Se=5;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=15;f=8;dt=0.5;tskip=10;stimsize=0.5;stimradius=0.6;bradius=.5;bhardness=0.95;'],
+['Rasa wave explore 15', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Aee=15.5;Aei=11.5;Ti=1;Te=2;Hi=4.8;He=3.2;Gi=0;Ge=1;Si=7;Se=4.7;Ni=0;Ne=0.4;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0;f=200;dt=0.3;tskip=1;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
+['Rasa wave explore 14', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10.3;Aee=12.2;Aei=11.5;Ti=1;Te=1;Hi=4.8;He=2.8;Gi=0;Ge=1;Si=6;Se=2.6;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0;f=105;dt=0.2;tskip=1;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
+['Rasa wave explore 13', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10.3;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.2;Aei=11.5;Te=1;He=3;Ge=1;Se=15;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=10;f=105;;bradius=1;bhardness=1;'],
+['Rasa wave explore 12', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.05;Amp=2;f=370;;bradius=1;bhardness=1;'],
+['Rasa wave explore 11', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=6;Ti=3;Hi=2.7;Gi=0;Si=2;Ni=0;ai=1;bi=0;Aee=7;Aei=6;Te=1;He=0.9;Ge=1;Se=.6;Ne=0.1;ae=1;gammae=1;be=0;dt=.2;Amp=10;f=90;;bradius=1;bhardness=1;'],
+['Rasa wave explore 10', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=1;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;;bradius=1;bhardness=1;'],
+['Rasa wave explore 9', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=2;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;;bradius=1;bhardness=1;'],
+['Rasa wave explore 8', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.7;Aei=11.5;Te=1;He=3;Ge=1;Se=2;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=1;f=200;;bradius=1;bhardness=1;'],
+['Rasa wave explore 7', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.4;Aei=11;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=50;;bradius=1;bhardness=1;'],
+['Rasa wave explore 6', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;;bradius=1;bhardness=1;'],
+['Rasa wave explore 5', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;;bradius=1;bhardness=1;'],
+['Rasa wave explore 4', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=280;;bradius=1;bhardness=1;'],
+['Rasa wave explore 3', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;;bradius=1;bhardness=1;'],
+['Rasa wave explore 2', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;;bradius=1;bhardness=1;'],
+['Rasa wave explore 1', 'randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.1;Amp=1;f=160;;bradius=1;bhardness=1;'],
+['Forest_Fire_0','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=3;Aie=18;Ti=5.8;Hi=5.5;Gi=0;Si=0.4;Ni=0;ai=2.7;bi=7.6;Aee=11.1;Aei=5.3;Te=2;He=3.1;Ge=0;Se=0.5;Ne=0.1;ae=1000;gammae=2;be=0.5;dt=2;Amp=11;f=0;;bradius=1;bhardness=1;'],
+['Forest_Fire_I','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;;bradius=1;bhardness=1;'],
+['Forest_Fire_II','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=1;Aie=15.8;Ti=13;Hi=5.9;Gi=0;Si=0;Ni=0.1;ai=2;bi=7;Aee=9.8;Aei=5;Te=2;He=2.9;Ge=0;Se=0.6;Ne=0.2;ae=1000;gammae=2;be=1;dt=1.7;Amp=11;f=0;;bradius=1;bhardness=1;'],
+['flicker','randomize','Sl=2.0;dt=1.0;Te=10.0;Ti=20.0;Aei=8.5;Aii=3.0;Aee=10.5;Aie=12.0;Hi=3.5;He=2.0;Ni=0.0;Ne=0.0;Gi=0.0;Ge=1.0;bi=0.0;be=0.0;Amp=0.6;f=6.8;Se=1;Si=2;ai=1;ae=1;;bradius=1;bhardness=1;'],
+['Psychedelic','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=13;Aei=14.5;Ti=12.5;Hi=3.5;Gi=0;Si=2.9;Ni=0;ai=100;bi=0;Aee=16.1;Aie=13.7;Te=4;He=3.1;Ge=0;Se=2;Ne=.75;ae=50;be=0;dt=1;Amp=0;f=0;;bradius=1;bhardness=1;'],
+['Rare_Waves','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=13;Aie=14.5;Ti=13;Hi=3.5;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=17.2;Aei=13.7;Te=4;He=3.1;Ge=0;Se=3;Ne=1;ae=50;be=1.3;dt=1;Amp=0;f=0;;bradius=1;bhardness=1;'],
+['Oscillators','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5;Ti=20;Hi=2.5;Gi=0;Si=1;Ni=0.5;ai=100;bi=0;Aee=8;Aei=5;Te=10;He=1;Ge=10;Se=1;Ne=0.5;ae=100;be=1;dt=1;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Chaos','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=11.7;Aie=20;Ti=36;Hi=4.4;Gi=0.3;Si=1;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Se=3;Ne=.1;ae=50;be=1;dt=1;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Prickles','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=11.7;Aie=20;Ti=80;Hi=0.6;Gi=0.3;Si=5;Ni=0;ai=12;bi=0;Aee=15.5;Aei=10;Te=5;He=2.2;Ge=0.6;Se=1;Ne=1;ae=4;be=1.4;dt=1;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Goldfish','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=11.7;Aie=20;Ti=80;Hi=0.6;Gi=0.3;Si=5;Ni=0;ai=12;bi=0;Aee=15.5;Aei=10;Te=5;He=2.2;Ge=0.6;Se=1;Ne=1;ae=140;be=2.8;dt=1.4;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Canard Chaos','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=20;Ti=20;Hi=3.7;Gi=0.3;Si=0.7;Ni=0;ai=12;bi=0.6;Aee=14.1;Aei=10;Te=5;He=1.8;Ge=0.6;Se=0.7;Ne=.1;ae=100;be=0.5;dt=1;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Oscillate','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=2.74;Ti=1.9;Hi=1.2;Gi=0;Si=.1;Ni=0;ai=9;bi=0;Aee=8;Aei=5.1;Te=1;He=0.1;Ge=0;Se=2;Ne=0.2;ae=200;be=2.2;dt=1;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Mycelium','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5;Ti=4;Hi=2.1;Gi=0.3;Si=2.6;Ni=0;ai=12;bi=1.1;Aee=12.6;Aei=9.6;Te=1;He=1.7;Ge=0.6;Se=.8;Ne=0.4;ae=1000;gammae=50;be=4.5;dt=1;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['?','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5;Ti=4;Hi=2.1;Gi=0.3;Si=2.6;Ni=0;ai=12;bi=1.1;Aee=12.6;Aei=9.6;Te=1;He=1.7;Ge=0.6;Se=.8;Ne=0.4;ae=1000;gammae=50;be=5.5;dt=1;Amp=0.3;f=50;;bradius=1;bhardness=1;'],
+['Beautiful_Chaos','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=6;Aie=14.3;Ti=50;Hi=4.7;Gi=0;Si=0.1;Ni=0.1;ai=1;bi=0;Aee=8.6;Aei=11.3;Te=3.2;He=2.3;Ge=1;Se=0.8;Ne=0.1;ae=1;gammae=100;be=0;dt=1;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Periodic_and_Homoclinic','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=7.3;Aie=21.3;Ti=10;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.2;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.1;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Periodic_and_Homoclinic_II','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=7.3;Aie=21.3;Ti=8;Hi=9.2;Gi=0;Si=0.01;Ni=0.1;ai=1;bi=0;Aee=10;Aei=5;Te=4;He=3.1;Ge=1;Se=1;Ne=0.1;ae=1;gammae=100;be=0;dt=0.5;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Blink','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;;bradius=1;bhardness=1;'],
+['Pretty','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=3.3;Ti=1.9;Hi=1.7;Gi=0;Si=0.9;Ni=0;ai=9;bi=0;Aee=8.9;Aei=5.7;Te=1;He=1.4;Ge=0;Se=0.8;Ne=0.1;ae=20;gammae=1;be=0.9;dt=0.1;Amp=8.6;f=6.5;;bradius=1;bhardness=1;'],
+['SNIC','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=6;Aie=18;Ti=5.8;Hi=7.6;Gi=0;Si=4.8;Ni=0;ai=2.7;bi=0;Aee=11.9;Aei=5.3;Te=2;He=3.6;Ge=0;Se=3;Ne=0.8;ae=1000;gammae=2;be=0;dt=1;Amp=0;f=0;;bradius=1;bhardness=1;'],
+['SNIC_Localized','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=7.9;Aie=18;Ti=5.8;Hi=7.5;Gi=0;Si=5;Ni=0;ai=2.7;bi=0;Aee=10;Aei=5.3;Te=2;He=3.5;Ge=0;Se=2;Ne=1.175;ae=1000;gammae=2;be=0;dt=0.7;Amp=0;f=0;;bradius=1;bhardness=1;'],
+['Quasicycles','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5.5;Ti=25;Hi=2;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=8.5;Aei=5;Te=4;He=1.9;Ge=10;Se=0.8;Ne=0.7;ae=100;gammae=100;be=0;dt=1;Amp=0;f=6.8;;bradius=1;bhardness=1;'],
+['Quasicycles 2','randomize','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5.5;Ti=25;Hi=2;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=8.5;Aei=5;Te=4;He=1.9;Ge=10;Se=8;Ne=0.4;ae=100;gammae=100;be=0;dt=2.9;Amp=0;f=6.8;;bradius=1;bhardness=1;']
+]
+
+function main() {
+    console.log('Initializing...');
+
+    var hidingframe   = document.getElementById('hidingframe');
+    var canvasoverlay = document.getElementById('canvasoverlay');
+    var clickblock    = document.getElementById('clickblock');
+    var frame         = document.getElementById('canvasdiv');
+    var canvas        = document.getElementById('maincanvas');
+    var phaseoverlay  = document.getElementById('phaseoverlay');
+    var linearreport  = document.getElementById('linearreport');
+    var lilbox        = document.getElementById('lilbox');
+    
+    const N   = 256;
+    const pad = 1.0;
+    const overflow = 0.1;
+    const N1  = N+1;
+    const Ue_cpu_buffer = new Float32Array(N1*N1);
+    const Ui_cpu_buffer = new Float32Array(N1*N1);
+    
+    const downscale = 0;
+    const W   = canvas.clientWidth >>downscale;
+    const H   = canvas.clientHeight>>downscale;
+    canvas.width  = W;
+    canvas.height = H;
+    console.log('W='+W,'H='+H)
+
+    var gl = getRasterGL(canvas);
+    // bit of a hack
+    gl.width = gl.height = N;
+
+    var dt  = null;   // Euler integrator time step
+    var Te  = null;   // Excitatory population time constant (ms)
+    var Ti  = null;   // Inhibitory population time constant (ms)
+    var Se  = null;   // Excitatory population spread
+    var Si  = null;   // Inhibitory population spread
+    var Sl  = null;   // Local population spread
+    var Aee = null;   // E-E coupling Aeight
+    var Aie = null;   // Excitation of Inhibitory coupling Aeight
+    var Aei = null;   // Inhibition of Excitatory coupling Aeight
+    var Aii = null;   // I-I coupling Aeight
+    var Wee = null;   // E-E coupling Aeight
+    var Wie = null;   // Excitation of Inhibitory coupling Aeight
+    var Wei = null;   // Inhibition of Excitatory coupling Aeight
+    var Wii = null;   // I-I coupling Aeight
+    var He  = null;   // Bias in E cell synaptic input
+    var Hi  = null;   // Bias in I cell synaptic input
+    var Ne  = null;   // Noise level (uniform) in E cells
+    var Ni  = null;   // Noise level (uniform) in I cells
+    var f   = null;   // Stim frequency Hz
+    var Ge  = null;   // Input drive to E cells
+    var Amp = null;   // Amplitude of stimulus
+    var Gi  = null;   // Input drive to I cells
+    var St  = null;   // Sinusoidal input stimulus is thresholded
+    var ai  = null;   // Timescale of inhibitory adaptation
+    var ae  = null;   // Timescale of excitatory adaptation
+    var gammae = 100.;  // Timescale of excitatory adaptation activation
+    var bi  = null;   // Strength of Inhibitory adaptation
+    var be  = null;   // Strength of Excitatotu adaptation
+    var Ue0 = 0.5;    // Fixed point to linearize around
+    var Ui0 = 0.5;
+    
+    var tskip      = 1;   // Frames to skip between drawing
+    var stimsize   = 0.3; // Size of stimulation spot
+    var stimradius = 0.7; // Radial displacement of simulation spot
+    var bradius    = 0.5; // boundary mask radius
+    var bhardness  = 0.75; // boundary hardness 
+    
+    const F  = (x)=>1/(1+Math.exp(-x));
+    const dF = (x)=>F(x)*F(-x);
+    
+    function follow() {
+        // Update Ue0 Ui0 to nearest fixed point
+        // We will use the steady-state adaptation and DC mode approximation.
+        // Recalculate derivatives
+        for (var iy=0; iy<=N; iy++) {
+            for (var ix=0; ix<=N; ix++) {
+                let Ue = iy/N*(1+2*overflow)-overflow;
+                let Ui = ix/N*(1+2*overflow)-overflow;
+                let i  = ix + N1*iy;
+                Ue_cpu_buffer[i] = F((Wee+Aee-be)*Ue-(Wei+Aei)*Ui-He)-Ue;
+                Ui_cpu_buffer[i] = F((Wie+Aie)*Ue-(bi+Wii+Aii)*Ui-Hi)-Ui;
+            }
+        }
+        // Locate nullcline intersections
+        let Ue0_ = Ue0 | 0.5;
+        let Uei_ = Ui0 | 0.5;
+        let Ue_new = Ue0_;
+        let Ui_new = Uei_;
+        let best_D = null;
+        for (var iy=0; iy<N; iy++) {
+            for (var ix=0; ix<N; ix++) {
+                let i   = ix + N1*iy;
+                let idx = i + 1;
+                let idy = i + N1;
+                a = Ue_cpu_buffer[i  ]<0;
+                b = Ue_cpu_buffer[idx]<0;
+                c = Ue_cpu_buffer[idy]<0;
+                let Ue_null = (a!=b)|(a!=c);
+                a = Ui_cpu_buffer[i  ]<0;
+                b = Ui_cpu_buffer[idx]<0;
+                c = Ui_cpu_buffer[idy]<0;
+                let Ui_null = (a!=b)|(a!=c);
+                if (Ue_null && Ui_null) {
+                    let Ue = iy/N*(1+2*overflow)-overflow;
+                    let Ui = ix/N*(1+2*overflow)-overflow;
+                    let D = Math.hypot(Ue-Ue0,Ui-Ui0);
+                    if (best_D==null || D<best_D) {
+                        Ue_new = Ue;
+                        Ui_new = Ui;
+                        best_D = D;
+                    }
+                }
+            }
+        }
+        //console.log('Ue0,Ui0 was '+Ue0+', '+Ui0+'; set to '+Ue_new+', '+Ui_new);
+        Ue0 = Ue_new;
+        Ui0 = Ui_new;
+        // Ue0 and Ui0 may range from -overflow to 1+overflow
+        let x = Ue0;
+        let y = Ui0;
+        // Convert to normalized [0,1] coordiantes
+        x = (x+overflow)/(1+2*overflow);
+        y = (y+overflow)/(1+2*overflow);
+        // Flip y axis
+        y = 1-y;
+        // (x,y) are now in normalized [0,1]² coordinates
+        // where "0" is -overflow and "1" is 1+overflow
+        x = N/2+(x*N-N/2)/pad;
+        y = N/2+(y*N-N/2)/pad;
+        // (x,y) are now in relative pixel coordiantes
+        lilbox.style.left = x-7;
+        lilbox.style.top  = y-7;
+    }
+    // Track mouse position to report local linearization of equations
+    phaseoverlay.onmousedown = (e) => {
+        let rect = e.target.getBoundingClientRect();
+        let x = e.clientX - rect.left; //x position within the element.
+        let y = e.clientY - rect.top;  //y position within the element.
+        let x2 = (x-N*.5)*pad+N*.5;
+        let y2 = ((N-y)-N*.5)*pad+N*.5;
+        if (x2>=0 && y2>=0 && x2<N && y2<N) {
+            let Ue = x2/N;
+            let Ui = y2/N;
+            Ue0 = Ue;
+            Ui0 = Ui;
+            compile_kernel();
+        }
+    };
+    
+    var Str = 0.5;
+
+    var running = 0;
+
+    // Simulus
+    function heav(z) {return z<.0?.0:z==.0?.5:1.;}
+    
+    //function Stim(t) {return heav(Math.sin(2*Math.PI*t*f/1000.)-Str)*Amp;}
+    function Stim(t) {return (Math.sin(2*Math.PI*t*f/1000.)-Str)*Amp;}
+
+    var clip_mode = gl.GL_CLAMP_TO_EDGE; //g.REPEAT
+    var temp1  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var temp2  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var U      = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var V      = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var UC     = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var UC2    = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var noise  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var hist   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var dohist = getRasterProgram(gl,'histogram');
+    var hblur  = GPUGaussianBlur(gl,5.0);
+    var copy   = GPUcopy(gl,N,N);
+    var blur   = GPUGaussianMultiBlur16(gl,0.5);
+    var blur2  = GPUGaussianMultiBlur16(gl,2,2);
+    var gpurng = GPUNoise(gl);
+    var rand   = WeakRNG();
+    // compiled later after initialization
+    var wc_kernel; 
+    var adapt_kernel;
+    var color;
+    randomize();
+    
+    /** Put parameters in kernel at compile time to take advantage
+     *  of optimizations.
+     */
+    function compile_kernel() {
+        try {
+            for (var i=0; i<controls.length; i++) {
+                var control = controls[i];
+                eval(control.name+'='+control.value);
+            }
+        } catch (err) {
+            console.log(err.message);
+        }
+        // Move the fixed point Ue0 Ui0 to nearest actual fixed point.
+        follow();
+        var wc_header = compile_bind(
+            get_parameters('wc_kernel-parameters'), {
+            dt : dt,  // Euler integrator time step
+            Te : Te,  // Excitatory population time constant (ms)
+            Ti : Ti,  // Inhibitory population time constant (ms)
+            Aee: Aee, // E-E coupling
+            Aie: Aie, // Excitation of Inhibitory coupling
+            Aei: Aei, // Inhibition of Excitatory coupling
+            Aii: Aii, // I-I coupling
+            Wee: Wee, // E-E coupling (local)
+            Wie: Wie, // Excitation of Inhibitory coupling (local)
+            Wei: Wei, // Inhibition of Excitatory coupling (local)
+            Wii: Wii, // I-I coupling (local)
+            He : He,  // Bias in E cell synaptic input
+            Hi : Hi,  // Bias in I cell synaptic input
+            bi : bi,  // Strength of Inhibitory adaptation
+            be : be,  // Strength of Excitatory adaptation
+            Ge : Ge,  // Simulation gain for e cells
+            Gi : Gi,  // Simulation gain for i cells
+            Ne : Ne,  // Noise level (uniform) in E cells
+            Ni : Ni,  // Noise level (uniform) in I cells
+            stimsize   : 0.5*(1/(.15*stimsize))*(1/(.15*stimsize)),
+               //= 0.3; // Size of stimulation spot
+            stimradius : stimradius, //= 0.7; // Radial displacement of simulation spot
+            bradius    : 1.0*bradius,    //= 0.9; // boundary mask radius
+            bhardness  : 10+Math.tan(bhardness*1.5707),  //= 0.5; // boundary hardness 
+        })[0];
+        wc_kernel = buildRasterProgram(gl,wc_header+$('wc_kernel').text);
+
+        var adapt_header = compile_bind(
+            get_parameters('adapt_kernel-parameters'), {
+            dt : dt,  // Euler integrator time step
+            ai : ai,  // Timescale of inhibitory adaptation
+            ae : ae,  // Timescale of excitatory adaptation
+            gammae : gammae, // Adaptation process activation timescale
+        })[0];
+        adapt_kernel = buildRasterProgram(gl,
+            adapt_header+$('adapt_kernel').text);
+        var color_header = compile_bind(
+            get_parameters('colormap-parameters'), {
+            Aee: Aee, // E-E coupling
+            Aie: Aie, // Excitation of Inhibitory coupling
+            Aei: Aei, // Inhibition of Excitatory coupling
+            Aii: Aii, // I-I coupling
+            Wee: Wee, // E-E coupling (local)
+            Wie: Wie, // Excitation of Inhibitory coupling (local)
+            Wei: Wei, // Inhibition of Excitatory coupling (local)
+            Wii: Wii, // I-I coupling (local)
+            Se : Se,
+            Si : Si, 
+            Sl : Sl, 
+            Te : Te,
+            Ti : Ti, 
+            Ue0 : Ue0,
+            Ui0 : Ui0, 
+            He : He,  // Bias in E cell synaptic input
+            Hi : Hi,  // Bias in I cell synaptic input
+            bi : bi,  // Strength of Inhibitory adaptation
+            be : be,  // Strength of Excitatory adaptation
+        })[0];
+        color = buildRasterProgram(gl,color_header+$('colormap').text);
+
+        blur  = GPUGaussianMultiBlur16(gl,Se,Si);
+        blur2 = GPUGaussianMultiBlur16(gl,Sl,Sl);
+    }
+
+    function nothing()   {}
+    function randomize() {
+        gpurng.randomize(U);
+        gpurng.randomize(V);
+        gpurng.randomize(noise);
+    }
+
+    var inputs = document.getElementsByTagName("input");
+    var controls = [];
+    for (var i=0; i<inputs.length; i++)
+        if (inputs[i].type=='number') {
+            controls.push(inputs[i]);
+            var input = inputs[i];
+            input.addEventListener('input',compile_kernel);
+        }
+    function setcontrols() {
+        for (var i=0; i<controls.length; i++) {
+            var control = controls[i];
+            eval('control.value='+control.name);
+        }
+        compile_kernel();
+    }
+
+    var buttons = [];
+    var stopstartbutton;
+    for (var i=0; i<inputs.length; i++) {
+        var button = inputs[i];
+        if (button.type=='button') {
+            buttons.push(button);
+            button.onclick = (function(button){return function(click) {
+                eval(button.value.replace(/\s/g,'').toLowerCase()+'()');
+            };})(button);
+            if (button.value=='Start') {
+                stopstartbutton=button;
+                button.style.width = button.offsetWidth;
+            }
+        }
+    }
+    function start() {
+        if (!running) setTimeout(iterate, 0);
+        running = 1;
+        stopstartbutton.value = "Stop";
+        canvasoverlay.style.display = "none";
+    }
+    function stop() {
+        running = 0;
+        stopstartbutton.value = "Start";
+    }
+    function step() {
+        stop();
+        iterate();
+    }
+    function statestring() {
+        var state='';
+        for (var i=0; i<controls.length; i++) {
+            var control = controls[i];
+            state += control.name+'='+control.value+';';
+        }
+        return state;
+    }
+    function save() {
+        var wasrunning = running;
+        stop();
+        prompt("Copy (control+C) these parameters & record them.\nThey can be reloaded using the 'Load' button.\n", statestring());
+        if (wasrunning) start();
+    }
+    function loadstring(s) {
+        eval(s);
+        setcontrols();
+        randomize();
+        start();
+    }
+    function load() {
+        stop();
+        result = prompt("Paste saved parameters below:\n","");
+        if (result) loadstring(result);
+    }
+
+    preset_container = document.getElementById('presets');
+    for (var i=0; i<presets.length; i++) {
+        var name = presets[i][0];
+        var init = eval(presets[i][1]);
+        var pdat = presets[i][2];
+        var ps = document.createElement("div");
+        ps.setAttribute("class","squarebutton");
+        ps.innerHTML = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzαβγδεφθιηκλμνπϟρστυωξζ'[i];
+        var st = document.createElement("div");
+        st.setAttribute("class","info");
+        st.innerHTML = name;
+        ps.appendChild(st);
+        ps.onclick   = (function(name,init,pdat){
+            return function() {
+                init();
+                eval(pdat);
+                setcontrols();
+                console.log(name);
+                start();
+            };})(name,init,pdat);
+        preset_container.appendChild(ps);
+    }
+    console.log('Presets loaded');
+
+    console.log
+    eval(presets[0][2]);
+    setcontrols();
+
+    var timestep = 0;
+    function iterate() {
+        try {
+            for (var i=0; i<tskip; i++) {
+                gpurng(noise,temp1);
+                blur(U,temp1,UC);
+                blur2(U,temp1,UC2);
+                var s = Stim(timestep*dt);
+                wc_kernel({
+                    Uin   :U,
+                    Vin   :V,
+                    Uconv :UC,
+                    Uconv2:UC2,
+                    noise :noise,
+                    s     :s,
+                    },temp1);
+                adapt_kernel({
+                    Uin   :U,
+                    Vin   :V
+                    },temp2);
+                copy(temp1,U);
+                copy(temp2,V);
+                timestep += 1;
+            }
+            dohist({Uin:U},temp1);
+            hblur(temp1,temp2,temp1);
+            color({
+                hist  :temp1,
+                Uin   :U,
+                Vin   :V});
+        } catch (err) {
+            console.log(err.message);
+        }
+        if (running) requestAnimationFrame(iterate);
+    }
+
+    hidingframe.style.display = "none";
+    clickblock.style.display  = "none";
+    clickblock.style.cursor   = "pointer";
+    var startfun = function(e) {
+        canvasoverlay.style.display = "none";
+        clickblock.style.display    = "none";
+        start();
+    };
+    clickblock.onclick    = startfun;
+    canvasoverlay.onclick = startfun;
+
+    console.log('Initialization complete');
+}
+
+function waitForMathJax()
+{
+    console.log('Waiting for MathJax to load');
+    try {
+        MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
+        MathJax.Hub.Queue(main);
+    } catch(e) {
+        console.log('MathJax is missing, continuing without it');
+        main();
+    }
+}
+</script>
+</body>
+</html>
+
+

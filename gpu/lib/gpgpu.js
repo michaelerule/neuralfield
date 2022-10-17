@@ -90,12 +90,14 @@ function activateVertexShaderPosition(gl,program) {
  */
 function asFloat(parameter) {
     return parameter; //bypass
+    /*
     var p = String(parameter);
     if ((p^0)==p && (p.indexOf('.')<=-1)) {
         // is an integer and no decimap
         p = p + '.0';
     }
     return '('+p+')';
+    */
 }
 
 
@@ -141,7 +143,7 @@ function buildRasterProgram(gl,fragment,defines) {
     callable_program.program = program;
     callable_program.source = source;
 
-    console.log(source);
+    //console.log(source);
 
     return callable_program;
 }
@@ -321,8 +323,8 @@ function newParameter(gl,program,unif) {
     // find out the correct way to set this variable
     function tn(s){return param.typename.indexOf(s)>=0;};
     if (tn('SAMPLER')) {
-        console.log('Located a texture binding');
-        console.log(param.typename+' '+param.name);
+        //console.log('Located a texture binding');
+        //console.log(param.typename+' '+param.name);
         param.setname = "uniform1i";
         param.mode    = 'texture';
         param.set = function(texture,index){
