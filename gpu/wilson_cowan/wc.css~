@@ -106,7 +106,7 @@ A {
 
 .checkbutton {
     margin: 1px 4px;
-    width:50px;
+    width:46px;
     height:13px;
     background:#333;
     color:#fff;
