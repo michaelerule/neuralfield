@@ -1,4 +1,4 @@
-# Neural field equations implemented in WebGL shaders
+# Neural field equations implemented as WebGL shaders
 
 This project builds on the [WebGL examples for GPGPU computing](https://github.com/michaelerule/webgpgpu) to develop in-browser WebGL implementations of Wilson-Cowan style neural field equations. These examples [can be browsed as a website here](https://michaelerule.github.io/neuralfield/).
 
