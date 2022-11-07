@@ -102,8 +102,6 @@ A {
     display:block;
     padding-top:5px;
 }
-
-
 .checkbutton {
     margin: 1px 4px;
     width:50px;
@@ -113,13 +111,10 @@ A {
     font-color:#fff;
     border:solid 1px #777;
     padding: 1px 1px 1px 1px;
-    
     text-align: center;
-    
     display: inline-flex;
     justify-content: center;
     align-content: center;
-    
     -webkit-appearance: none;
 }
 .checkbutton:hover {
@@ -139,9 +134,6 @@ input[type=number] {
     border:solid 1px #777;
     padding: 1px 1px 1px 1px;
 }
-
-
-
 .button_container {
     margin-top:4px;
     margin-left:1px;
