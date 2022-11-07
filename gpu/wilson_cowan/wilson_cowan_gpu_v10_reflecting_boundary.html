@@ -521,12 +521,6 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
                 <div class="control">hardness<input type="number" step="0.05" max="1"  min="0" name="bhardness" value="0.5"/></div>
             </div>
         </div>
-            
-        <div class="controltext">
-            Presets
-        </div>
-        <div class="button_container" id="presets">
-        </div>
 
     </div>
 
@@ -592,23 +586,45 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
         </div>
 
         <div id="equation">
-            \[\textrm{E-cells:  } 
-            \tau_e \dot{U_e} = -U_e + f\left[
+            <div style="text-align:center;">
+            \[
+            \begin{aligned}
+            \text{Firing-rates:} &&
+            \tau_e \dot{U_e} &= -U_e + f\left[
+            D   _e 
+            - \theta_e + g_e S(t) - \beta_e V_e\right]
+            \\&&
+            \tau_i \dot{U_i} &= -U_i + f\left[ 
+            D_i
+            - \theta_i + g_i S(t) - \beta_i V_i \right]
+            \\
+            \text{Synaptic drives:}&&
+            D_e &=
             (w_{ee} K_l + a_{ee} K_e) \star U_e 
-            - (w_{ie} K_l + a_{ie}   K_i) \star U_i 
-            - \theta_e + g_e S(t) - \beta_e V_e\right]\]
-            \[\textrm{I-cells:  } 
-            \tau_i \dot{U_i} = -U_i + f\left[ 
+            - (w_{ie} K_l + a_{ie}   K_i) \star U_i
+            \\&&
+            D_i &=
             (w_{ei}K_l +a_{ei} K_e) \star U_e 
             - (w_{ii}K_l + a_{ii} K_i) \star U_i 
-            - \theta_i + g_i S(t) - \beta_i V_i \right]\]
-            \[\textrm{E-cell adaptation:  } \tau_{ve} \dot{V_e} = U_e - V_e,\,\,
-             \tau_{ve} = \begin{cases} \alpha_e & \text{if }V_e< U_e \\ 
-             \gamma_e & \text{if }V_e\ge U_e\end{cases} \]
-            \[\textrm{I-cell adaptation:  } \alpha_i \dot{V_i} = U_i - V_i \]
-            \[\textrm{Interaction kernels (normalized to 1):  } K_{e,i,l}(x,y) 
-            \propto \exp\left(\frac{1}{2} \frac{x^2}{\sigma_{e,i,l}^2}
-            +\frac{1}{2} \frac{y^2}{\sigma_{e,i,l}^2}\right)\]
+            \\
+            \text{Synaptic adaptation:}&&
+            \tau_{ve} \dot{V_e} &= U_e - V_e,\,\,
+            \tau_{ve} = 
+            \begin{cases} 
+                \alpha_e & \text{if }V_e< U_e 
+                \\
+                \gamma_e & \text{if }V_e\ge U_e
+            \end{cases} 
+            \\&&
+            \alpha_i \dot{V_i} &= U_i - V_i 
+            \\
+            \text{Interaction kernels:}&&
+            K_{e,i,l}(x,y) 
+            &\propto \exp\big(\tfrac{1}{2} \tfrac{x^2}{\sigma_{e,i,l}^2}
+            +\tfrac{1}{2} \tfrac{y^2}{\sigma_{e,i,l}^2}\big)
+            \end{aligned}
+            \]
+            </div>
         </div>
 
         <!-- Invisible overlay of bottom left phase plane to detect mouse over -->
@@ -661,6 +677,12 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
             <input class="button" type="button" value="Load"/>
             <input class="button" type="button" value="Randomize"/>
         </div>
+            
+        <div class="controltext">
+            Presets
+        </div>
+        <div class="button_container" id="presets">
+        </div>
         
         
     </div>
@@ -673,6 +695,7 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
 //['Rule Stoffregen Ermentrou 2011 A',''].
 //['Rule Stoffregen Ermentrou 2011 B',''].
 presets=[
+['Fun ripples','waveform="sine";Wii=0;Wie=5;Wee=8.2;Wei=4.49;Si=0.8;Se=5;Sl=0;Aii=0;Aie=0;Aee=1.1;Aei=0;Ti=2.1;Te=2.3;Hi=2.55;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=90;bi=0.9;ae=10;gammae=10;be=0.8;Amp=0;f=25;stimsize=0.1;stimradius=0.4;tskip=5;dt=0.3;bradius=1;bhardness=1;'],
 ['Stripe waves', 'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=2;Aii=6;Aie=14.3;Aee=8.8;Aei=11.3;Ti=40.2;Te=3.1;Hi=7;He=2.8;Gi=0;Ge=1;Ni=0.1;Ne=0.7;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0;f=6.8;dt=.1;tskip=20;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
 ['Does not propagate', 'waveform="sine";Wii=0;Wie=4.8;Wee=8.22;Wei=4.5;Si=0.8;Se=10;Sl=1.2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0.1;ae=1;gammae=1;be=0.1;Amp=1.2;f=7;dt=0.3;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.4;bhardness=1;'],
 ['Threshold','waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=0.8;Se=5;Sl=1.2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=2;dt=0.3;tskip=10;stimsize=0.1;stimradius=0.9;bradius=0.4;bhardness=1;'],
@@ -681,55 +704,55 @@ presets=[
 'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=1.7;Te=2.2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=25;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.8;bradius=0.8;bhardness=1;'],
 ['Unusual',
 'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=4.8;Se=3;Sl=2;Aii=6;Aie=17.8;Aee=11.7;Aei=5.6;Ti=5.8;Te=2;Hi=7.6;He=3.6;Gi=0;Ge=1;Ni=0;Ne=0;ai=2.7;bi=0;ae=1000;gammae=2;be=0;Amp=1.5;f=4;dt=0.5;tskip=20;stimsize=0.8;stimradius=1;bradius=0.45;bhardness=1;'],
-['Rasa wave explore 37',
+['wave explore 37',
 'waveform="sine";Wii=0;Wie=4.7;Wee=8.4;Wei=5.3;Si=4.1;Se=17.8;Sl=2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.88975;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=10;gammae=10;be=0;Amp=5;f=2;dt=0.5;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.45;bhardness=1;'],
-['Rasa wave explore 36',
+['wave explore 36',
 'waveform="sine";Wii=0;Wie=4.6;Wee=8.4;Wei=5.4;Si=4.1;Se=17.8;Sl=2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.88975;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=10;gammae=10;be=0;Amp=5;f=40;dt=0.5;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.45;bhardness=1;'],
-['Rasa wave explore 35',
+['wave explore 35',
 'waveform="sine";Wii=0;Wie=4.8;Wee=8.5;Wei=5.3;Si=4.1;Se=17.8;Sl=2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.88975;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=10;gammae=10;be=0;Amp=5;f=5;dt=0.2;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.45;bhardness=1;'],
-['Rasa wave explore 34',
+['wave explore 34',
 'waveform="sine";Wii=0;Wie=5;Wee=8.3;Wei=5;Si=4.1;Se=17.8;Sl=2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=3;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0;f=5;dt=0.2;tskip=20;stimsize=0.3;stimradius=0.6;bradius=0.45;bhardness=1;'],
-['Rasa wave explore 33',
+['wave explore 33',
 'waveform="sine";Wii=0;Wie=4.7;Wee=8.7;Wei=5.1;Si=4;Se=15;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=16;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.6;bradius=0.45;bhardness=1;'],
-['Rasa wave explore 32',
+['wave explore 32',
 'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=18;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.8;bradius=0.4;bhardness=1;'],
-['Rasa wave explore 31',
+['wave explore 31',
 'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=18;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.8;bradius=0.8;bhardness=1;'],
-['Rasa wave explore 30',
+['wave explore 30',
 'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10;Sl=0.5;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=15;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.6;bradius=0.7;bhardness=1;'],
-['Rasa wave explore 29',
+['wave explore 29',
 'waveform="sine";Wii=0;Wie=4.7;Wee=8.2;Wei=4.5;Si=4;Se=10;Sl=0.5;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=15;dt=.2;tskip=20;stimsize=0.2;stimradius=0.6;bradius=0.25;bhardness=0.975;'],
-['Rasa wave explore 28', 'Wii=0;Wie=2;Wee=4;Wei=2;Si=2;Se=8;Sl=2;Aii=0;Aie=2;Aee=4;Aei=2;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.25;bhardness=0.95;'],
-['Rasa wave explore 27',
+['wave explore 28', 'Wii=0;Wie=2;Wee=4;Wei=2;Si=2;Se=8;Sl=2;Aii=0;Aie=2;Aee=4;Aei=2;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.25;bhardness=0.95;'],
+['wave explore 27',
 'waveform="sine";Sl=2.0;Wii=0;Wie=3;Wee=4;Wei=2;Si=7.2;Se=6;Aii=0;Aie=1;Aee=4;Aei=2;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.55;bhardness=0.95;'],
-['Rasa wave explore 26',
+['wave explore 26',
 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=4;Wei=0;Si=0.1;Se=0.1;Aii=0;Aie=4;Aee=4;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.35;bhardness=0.95;'],
-['Rasa wave explore 25',
+['wave explore 25',
 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=4;Wei=0;Si=0.5;Se=3;Aii=0;Aie=4;Aee=4;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.3;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
-['Rasa wave explore 24', 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Si=3;Se=5;Aii=0;Aie=4;Aee=8;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.3;stimradius=0.6;bradius=.5;bhardness=0.95;'],
-['Rasa wave explore 23', 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Si=1;Se=2;Aii=0;Aie=4;Aee=8;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.5;stimradius=0.6;bradius=.5;bhardness=0.95;'],
-['Rasa wave explore 22', 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=8;Wei=0;Si=1;Se=2;Aii=0;Aie=4;Aee=0;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=0.2;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0;f=50;dt=0.05;tskip=10;stimsize=0.6;stimradius=0;bradius=1;bhardness=0.95;'],
-['Rasa wave explore 21','waveform="sine";Sl=2.0;Wii=0.4;Wie=0;Wee=0.5;Wei=0;Aii=0;Aie=3.3;Aee=8.8;Aei=5.7;Ti=1.9;Te=1;Hi=1.85;He=1.6;Gi=0;Ge=0.2;Si=0.6;Se=2.3;Ni=0;Ne=0.1;ai=9;bi=0;ae=100;gammae=1;be=1.3;Amp=1;f=50;dt=0.05;tskip=10;stimsize=0.6;stimradius=0;bradius=1;bhardness=0.95;'],
-['Rasa wave explore 20','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0.32;Wei=0;Aii=0;Aie=3.3;Aee=8.9;Aei=5.7;Ti=1.9;Te=1;Hi=1.7;He=1.4;Gi=0;Ge=0;Si=0.9;Se=0.8;Ni=0;Ne=0.1;ai=9;bi=0;ae=20;gammae=1;be=0.9;Amp=8.6;f=6.5;dt=0.1;tskip=10;stimsize=0.8;stimradius=0.6;bradius=1;bhardness=0.95;'],
-['Rasa wave explore 19','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0.1;Wei=0;Aii=3.8;Aie=7;Aee=13.1;Aei=10.2;Ti=10.5;Te=8.2;Hi=1.9;He=1.8;Gi=0;Ge=1;Si=6.1;Se=12;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0.7;f=18;dt=0.5;tskip=10;stimsize=0.8;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
-['Rasa wave explore 18','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Aii=7.9;Aie=18;Aee=10.4;Aei=5.3;Ti=5.8;Te=2;Hi=7.5;He=3.4;Gi=0;Ge=0;Si=5;Se=2;Ni=0;Ne=1.1;ai=2.7;bi=0.8;ae=1000;gammae=2;be=0.3;Amp=0;f=0;dt=0.7;tskip=10;stimsize=0.8;stimradius=0.6;bradius=1;bhardness=0.95;'],
-['Rasa wave explore 17','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Aii=3.8;Aie=7;Aee=12.9;Aei=10.2;Ti=10.5;Te=9.4;Hi=1.9;He=1.8;Gi=0;Ge=1;Si=0.1;Se=8;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=-0.1;Amp=1;f=8;dt=0.5;tskip=10;stimsize=0.5;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
-['Rasa wave explore 16','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=3.5;Aie=6.8;Aee=13.5;Aei=9.6;Ti=10;Te=10;Hi=1.6;He=2;Gi=0;Ge=1;Si=.1;Se=5;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=15;f=8;dt=0.5;tskip=10;stimsize=0.5;stimradius=0.6;bradius=.5;bhardness=0.95;'],
-['Rasa wave explore 15','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Aee=15.5;Aei=11.5;Ti=1;Te=2;Hi=4.8;He=3.2;Gi=0;Ge=1;Si=7;Se=4.7;Ni=0;Ne=0.4;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0;f=200;dt=0.3;tskip=1;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
-['Rasa wave explore 14','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10.3;Aee=12.2;Aei=11.5;Ti=1;Te=1;Hi=4.8;He=2.8;Gi=0;Ge=1;Si=6;Se=2.6;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0;f=105;dt=0.2;tskip=1;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
-['Rasa wave explore 13','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10.3;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.2;Aei=11.5;Te=1;He=3;Ge=1;Se=15;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=10;f=105;bradius=1;bhardness=1;'],
-['Rasa wave explore 12','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.05;Amp=2;f=370;bradius=1;bhardness=1;'],
-['Rasa wave explore 11','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=6;Ti=3;Hi=2.7;Gi=0;Si=2;Ni=0;ai=1;bi=0;Aee=7;Aei=6;Te=1;He=0.9;Ge=1;Se=.6;Ne=0.1;ae=1;gammae=1;be=0;dt=.2;Amp=10;f=90;bradius=1;bhardness=1;'],
-['Rasa wave explore 10','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=1;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;bradius=1;bhardness=1;'],
-['Rasa wave explore 9','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=2;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;bradius=1;bhardness=1;'],
-['Rasa wave explore 8','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.7;Aei=11.5;Te=1;He=3;Ge=1;Se=2;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=1;f=200;bradius=1;bhardness=1;'],
-['Rasa wave explore 7','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.4;Aei=11;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=50;bradius=1;bhardness=1;'],
-['Rasa wave explore 6','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;bradius=1;bhardness=1;'],
-['Rasa wave explore 5','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;bradius=1;bhardness=1;'],
-['Rasa wave explore 4','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=280;bradius=1;bhardness=1;'],
-['Rasa wave explore 3','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;bradius=1;bhardness=1;'],
-['Rasa wave explore 2','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;bradius=1;bhardness=1;'],
-['Rasa wave explore 1','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.1;Amp=1;f=160;bradius=1;bhardness=1;'],
+['wave explore 24', 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Si=3;Se=5;Aii=0;Aie=4;Aee=8;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.3;stimradius=0.6;bradius=.5;bhardness=0.95;'],
+['wave explore 23', 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Si=1;Se=2;Aii=0;Aie=4;Aee=8;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.5;stimradius=0.6;bradius=.5;bhardness=0.95;'],
+['wave explore 22', 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=8;Wei=0;Si=1;Se=2;Aii=0;Aie=4;Aee=0;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=0.2;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0;f=50;dt=0.05;tskip=10;stimsize=0.6;stimradius=0;bradius=1;bhardness=0.95;'],
+['wave explore 21','waveform="sine";Sl=2.0;Wii=0.4;Wie=0;Wee=0.5;Wei=0;Aii=0;Aie=3.3;Aee=8.8;Aei=5.7;Ti=1.9;Te=1;Hi=1.85;He=1.6;Gi=0;Ge=0.2;Si=0.6;Se=2.3;Ni=0;Ne=0.1;ai=9;bi=0;ae=100;gammae=1;be=1.3;Amp=1;f=50;dt=0.05;tskip=10;stimsize=0.6;stimradius=0;bradius=1;bhardness=0.95;'],
+['wave explore 20','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0.32;Wei=0;Aii=0;Aie=3.3;Aee=8.9;Aei=5.7;Ti=1.9;Te=1;Hi=1.7;He=1.4;Gi=0;Ge=0;Si=0.9;Se=0.8;Ni=0;Ne=0.1;ai=9;bi=0;ae=20;gammae=1;be=0.9;Amp=8.6;f=6.5;dt=0.1;tskip=10;stimsize=0.8;stimradius=0.6;bradius=1;bhardness=0.95;'],
+['wave explore 19','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0.1;Wei=0;Aii=3.8;Aie=7;Aee=13.1;Aei=10.2;Ti=10.5;Te=8.2;Hi=1.9;He=1.8;Gi=0;Ge=1;Si=6.1;Se=12;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0.7;f=18;dt=0.5;tskip=10;stimsize=0.8;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
+['wave explore 18','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Aii=7.9;Aie=18;Aee=10.4;Aei=5.3;Ti=5.8;Te=2;Hi=7.5;He=3.4;Gi=0;Ge=0;Si=5;Se=2;Ni=0;Ne=1.1;ai=2.7;bi=0.8;ae=1000;gammae=2;be=0.3;Amp=0;f=0;dt=0.7;tskip=10;stimsize=0.8;stimradius=0.6;bradius=1;bhardness=0.95;'],
+['wave explore 17','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Aii=3.8;Aie=7;Aee=12.9;Aei=10.2;Ti=10.5;Te=9.4;Hi=1.9;He=1.8;Gi=0;Ge=1;Si=0.1;Se=8;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=-0.1;Amp=1;f=8;dt=0.5;tskip=10;stimsize=0.5;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
+['wave explore 16','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=3.5;Aie=6.8;Aee=13.5;Aei=9.6;Ti=10;Te=10;Hi=1.6;He=2;Gi=0;Ge=1;Si=.1;Se=5;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=15;f=8;dt=0.5;tskip=10;stimsize=0.5;stimradius=0.6;bradius=.5;bhardness=0.95;'],
+['wave explore 15','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Aee=15.5;Aei=11.5;Ti=1;Te=2;Hi=4.8;He=3.2;Gi=0;Ge=1;Si=7;Se=4.7;Ni=0;Ne=0.4;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0;f=200;dt=0.3;tskip=1;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
+['wave explore 14','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10.3;Aee=12.2;Aei=11.5;Ti=1;Te=1;Hi=4.8;He=2.8;Gi=0;Ge=1;Si=6;Se=2.6;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0;f=105;dt=0.2;tskip=1;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
+['wave explore 13','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10.3;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.2;Aei=11.5;Te=1;He=3;Ge=1;Se=15;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=10;f=105;bradius=1;bhardness=1;'],
+['wave explore 12','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.05;Amp=2;f=370;bradius=1;bhardness=1;'],
+['wave explore 11','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=6;Ti=3;Hi=2.7;Gi=0;Si=2;Ni=0;ai=1;bi=0;Aee=7;Aei=6;Te=1;He=0.9;Ge=1;Se=.6;Ne=0.1;ae=1;gammae=1;be=0;dt=.2;Amp=10;f=90;bradius=1;bhardness=1;'],
+['wave explore 10','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=1;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;bradius=1;bhardness=1;'],
+['wave explore 9','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=2;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;bradius=1;bhardness=1;'],
+['wave explore 8','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.7;Aei=11.5;Te=1;He=3;Ge=1;Se=2;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=1;f=200;bradius=1;bhardness=1;'],
+['wave explore 7','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.4;Aei=11;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=50;bradius=1;bhardness=1;'],
+['wave explore 6','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;bradius=1;bhardness=1;'],
+['wave explore 5','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;bradius=1;bhardness=1;'],
+['wave explore 4','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=280;bradius=1;bhardness=1;'],
+['wave explore 3','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;bradius=1;bhardness=1;'],
+['wave explore 2','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;bradius=1;bhardness=1;'],
+['wave explore 1','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.1;Amp=1;f=160;bradius=1;bhardness=1;'],
 ['Forest_Fire_0','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=3;Aie=18;Ti=5.8;Hi=5.5;Gi=0;Si=0.4;Ni=0;ai=2.7;bi=7.6;Aee=11.1;Aei=5.3;Te=2;He=3.1;Ge=0;Se=0.5;Ne=0.1;ae=1000;gammae=2;be=0.5;dt=2;Amp=11;f=0;bradius=1;bhardness=1;'],
 ['Forest_Fire_I','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;bradius=1;bhardness=1;'],
 ['Forest_Fire_II','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=1;Aie=15.8;Ti=13;Hi=5.9;Gi=0;Si=0;Ni=0.1;ai=2;bi=7;Aee=9.8;Aei=5;Te=2;He=2.9;Ge=0;Se=0.6;Ne=0.2;ae=1000;gammae=2;be=1;dt=1.7;Amp=11;f=0;bradius=1;bhardness=1;'],

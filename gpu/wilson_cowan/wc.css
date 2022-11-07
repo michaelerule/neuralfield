@@ -25,7 +25,7 @@ A {
 }
 #canvasoverlay {
     margin: auto;
-    padding: 0;
+    padding: 0px;
     width:511px;
     height:511px;
     cursor: pointer;
@@ -37,12 +37,12 @@ A {
     text-align: center;
 }
 #equation {
-    width:512;
+    width:512px;
     padding:0px;
     margin:auto;
-    display:block;
+    display:inline-block;
     clear:both;
-    text-align:center;
+    text-align:left;
     font-size:75%;
     position:absolute;
     top:512px;
@@ -138,22 +138,7 @@ input[type=number] {
     font-color:#fff;
     border:solid 1px #777;
     padding: 1px 1px 1px 1px;
-    -webkit-appearance: none;
 }
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button {
-    /* display: none; <- Crashes Chrome on hover */
-    -webkit-appearance: none;
-    margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
-    opacity: 0;
-    pointer-events: none;
-}
-input[type=number]::-webkit-inner-spin-button,
-input[type=number]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type=number] {-moz-appearance: textfield;}
 
 
 
