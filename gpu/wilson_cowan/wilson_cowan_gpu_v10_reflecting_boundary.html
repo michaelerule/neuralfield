@@ -85,6 +85,8 @@ void main() {
         vec2 T  = twopi*n.zw;           // into Gaussian using Box-
         N = vec2(R*cos(T))*sqrt(dt); // Muller transform.
     }   
+    // This isn't quite correct but is ... close enough
+    N = N*sqrt(dt);
     
     // Unpack state from texture information
     // using two channels per float (16 bit fixed point)
