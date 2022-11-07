@@ -3,7 +3,7 @@
 This project builds on the [WebGL examples for GPGPU computing](https://github.com/michaelerule/webgpgpu) to develop in-browser WebGL implementations of Wilson-Cowan style neural field equations. These examples [can be browsed as a website here](https://michaelerule.github.io/neuralfield/).
 
 This project is ever in-development; Don't hesistate to open an issue if you'd like a specific stable configuration to demonstrate a particular effect. 
-[The most recent WebGL implementation can be found here](https://michaelerule.github.io/neuralfield/gpu/wilson_cowan/wilson_cowan_gpu_v10_reflecting_boundary.html).
+[The most recent WebGL implementation can be found here](https://michaelerule.github.io/neuralfield/gpu/wilson_cowan/wilson_cowan_gpu_v10_reflecting_boundary.html), and should look like this:
 
 ![Screenshot at 2022-11-07 16-37-24](https://user-images.githubusercontent.com/687425/200365734-4fb6722c-bc61-4379-8fb0-67a9be091ce3.png)
 
