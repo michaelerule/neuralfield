@@ -779,14 +779,6 @@ presets=[
 ['wave explore 3','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;bradius=1;bhardness=1;'],
 ['wave explore 2','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;bradius=1;bhardness=1;'],
 ['wave explore 1','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.1;Amp=1;f=160;bradius=1;bhardness=1;'],
-['ghostglider','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.2;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['flameflicker','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0;Se=2.9;Sl=1.5;Aii=4.3;Aie=20.3;Aee=11.8;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.3;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['plasma','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0.2;Se=2.9;Sl=1.5;Aii=4.5;Aie=20.3;Aee=11.8;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.1;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.2;bradius=1;bhardness=1;'],
-['physarisce','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.1;Se=4;Sl=1.7;Aii=5.9;Aie=20.3;Aee=11.4;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.7;ai=5;bi=3.8;ae=100;gammae=2;be=0.4;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.4;bradius=1;bhardness=1;'],
-['shiver','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2.1;Se=1.7;Sl=0.8;Aii=5.6;Aie=20.3;Aee=12;Aei=5.1;Ti=4.7;Te=2.6;Hi=6.2;He=3.25;Gi=0;Ge=0;Ni=0;Ne=0.7;ai=5;bi=3.8;ae=100;gammae=2.1;be=0.8;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.4;bradius=1;bhardness=1;'],
-['ghostlight','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.9;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['gostlight2','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.5;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=11.1;Te=4.3;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['stepwise','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0;Se=2.7;Sl=1.5;Aii=3.9;Aie=20.6;Aee=11.8;Aei=5.2;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0.4;Ni=0;Ne=0.4;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=2;stimsize=0.1;stimradius=0;tskip=2;dt=0.5;bradius=1;bhardness=1;'],
 ]
 
 function main() {
