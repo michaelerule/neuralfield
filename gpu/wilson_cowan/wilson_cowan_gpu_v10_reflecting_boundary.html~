@@ -447,10 +447,10 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
         </div>
         <div style="clear:both;display:block">
             <div class="controls">
-                <div class="control">$\theta_i$<input type="number" step="0.2" max="100" min="-100" name="Hi" value="3.5"/></div>
+                <div class="control">$\theta_i$<input type="number" step="0.025" max="100" min="-100" name="Hi" value="3.5"/></div>
             </div>
             <div class="controls">
-                <div class="control">$\theta_e$<input type="number" step="0.2" max="100" min="-100" name="He" value="2.0"/></div>
+                <div class="control">$\theta_e$<input type="number" step="0.025" max="100" min="-100" name="He" value="2.0"/></div>
             </div>
         </div>
         <div class="controltext">
