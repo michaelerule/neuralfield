@@ -267,7 +267,6 @@ vec2 dU_full_adaptation(vec2 u) {
         F((Wie+Aie)*u.x-bi-(Wii+Aii)*u.y-Hi)-u.y);
 }
 vec4 eigvals(vec2 u) {
-    // u is probably pixel coords in [0,1]^2 or [-.1,1.1]^2
     // u.x = ν should be the spatial frequency axis, with units of inverse pixels
     // u.y = ω should be the temporal frequency axis, with units of 1/τ_e
     float v = u.x;

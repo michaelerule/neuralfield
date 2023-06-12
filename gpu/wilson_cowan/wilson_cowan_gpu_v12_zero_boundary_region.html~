@@ -22,6 +22,7 @@
 </script>
 
 <script id="wc_kernel-parameters" type="x-fragment-parameters">
+// MAIN WILSON COWAN KERNEL
 // Note: this is not Javascript and these values are not
 // directly accessible to either the main function or the wilson-
 // cowan kernel below. These are type declarations, to be 
@@ -77,7 +78,7 @@ void main() {
     vec4 V  = texture2D(Vin  , XY); // adaptation fields
     vec4 Uc = texture2D(Uconv, XY); // convolved fields
     vec4 Ul = texture2D(Uconv2,XY); // convolved fields
-
+    // Sample noise
     vec2 N = vec2(0.0);
     if (Ne>0. || Ni>0.) {
         vec4 n  = texture2D(noise, XY)*0.999+0.0001; // uniform noise
@@ -87,7 +88,6 @@ void main() {
     }   
     // This isn't quite correct but is ... close enough
     N = N*sqrt(dt);
-    
     // Unpack state from texture information
     // using two channels per float (16 bit fixed point)
     float Ce = DecodeFloatXY(Uc.xy); // nonlocal convolution
@@ -98,36 +98,39 @@ void main() {
     float Ui = DecodeFloatXY(U.zw);
     float Ve = DecodeFloatXY(V.xy); // adaptation variables
     float Vi = DecodeFloatXY(V.zw);
-    
     // Note: blurred masks standard deviations are xyzw = 0,Se,Si,Sl
     // Use these to correctly normalize convolutions near boundaries
     vec4 m = texture2D(masks,XY);
-    
+    // Normalize convoltion near boundary
     // Note 20230523: I've removed this to pull boundary to zero
     //Ce = Ce/m.y;
     //Ci = Ci/m.z;
     //Le = Le/m.w;
     //Li = Li/m.w;
-
     // Stimulus
     float  d = length(XY-vec2(0.5,0.5)+vec2(0.5,0.5)*stimradius);
     float s2 = s*exp(-(d*d)*stimsize);
-    
+    // Firing rates
     float Ae  = F(Wee*Le-Wei*Li+Aee*Ce-Aei*Ci-He+Ge*s2-Ve*be+Ne*N.x);
     float Ai  = F(Wie*Le-Wii*Li+Aie*Ce-Aii*Ci-Hi+Gi*s2-Vi*bi+Ni*N.y);
-    
-    float Ue_out = Ue + (Ae - Ue)*(dt/Te);
-    float Ui_out = Ui + (Ai - Ui)*(dt/Ti);
-    
+    // Forward Euler
+    //float Ue_out = Ue + (Ae - Ue)*(dt/Te);
+    //float Ui_out = Ui + (Ai - Ui)*(dt/Ti);
+    // Coordinatewise exponential Euler
+    float alphae = exp(-dt/Te);
+    float alphai = exp(-dt/Ti);
+    float Ue_out = alphae*(Ue - Ae) + Ae;
+    float Ui_out = alphai*(Ui - Ai) + Ai;
+    // Save
     gl_FragColor = vec4(
         EncodeFloatXY(Ue_out),
         EncodeFloatXY(Ui_out))*m.x;
-    
 }
 </script>
 
 
 <script id="generate_masks_kernel-parameters" type="x-fragment-parameters">
+// REGION MASK KERNEL
 float bradius;   // boundary mask radius
 float bhardness; // boundary hardness 
 </script>
@@ -135,11 +138,13 @@ float bhardness; // boundary hardness
 void main() {
     vec2 XY  = gl_FragCoord.xy/vec2(W,H); // Get location in [0,1]² coordinates
     XY = XY - vec2(.5,.5); // Center
-    XY = vec2(XY.x+XY.y,XY.x-XY.y)*0.7071067811865476;
-    XY = abs(XY);
-    XY = pow(XY,vec2(1.5,1.5));
-    float d  = XY.x+XY.y; // Get distance from center
+    XY = vec2(XY.x+XY.y,XY.x-XY.y);//*0.7071067811865476;
+    XY = pow(abs(XY),vec2(2,2)); // Power: 1 for square, 2 for circle
+    
+    float d;
+    d = XY.x+XY.y; // Get distance from center
     d = pow(d,.5);
+    
     float rr = 1./(1.+exp((d-bradius)*bhardness)); // 
     gl_FragColor = vec4(rr,rr,rr,rr);
 }
@@ -147,6 +152,7 @@ void main() {
 
 
 <script id="adapt_kernel-parameters" type="x-fragment-parameters">
+// ADAPTATION KERNEL
 sampler2D Uin;
 sampler2D Vin;
 float dt;  // Euler integrator time step
@@ -176,12 +182,19 @@ void main() {
     float Ui_in = DecodeFloatXY(U.zw);
     float Ve_in = DecodeFloatXY(V.xy);
     float Vi_in = DecodeFloatXY(V.zw);
-    float dVe   = (Ue_in - Ve_in);
-    float Ve    = 
-        Ue_in > Ve_in 
-            ? Ve_in + dVe*(dt/gammae)
-            : Ve_in + dVe*(dt/ae);
-    float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
+    
+    // Forward Euler
+    //float te  = Ue_in > Ve_in? gammae : ae;
+    //float Ve  = Ve_in + (Ue_in - Ve_in)*(dt/te);
+    //float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
+    
+    // Coordinatewise exponential Euler
+    float te  = Ue_in > Ve_in? gammae : ae;
+    float alphae = exp(-dt/te);
+    float alphai = exp(-dt/ai);
+    float Ve = alphae*(Ve_in - Ue_in) + Ue_in;
+    float Vi = alphai*(Vi_in - Ui_in) + Ui_in;
+
     gl_FragColor = vec4(
         EncodeFloatXY(Ve),
         EncodeFloatXY(Vi));
@@ -334,7 +347,6 @@ void main() {
         if (zm!=clamp(zm,0.,1.)) {gl_FragColor = vec4(0.0); return;}
         // Pixel coordinates zm are still in [0,1]^2
         // We'd just now restricted ourself to an inset region
-        
         // OVERFLOW is 0.1
         // This extends the domain by 10% beyond the [0,1]^2
         zm = zm*(1.+2.*OVERFLOW)-OVERFLOW;
@@ -342,7 +354,6 @@ void main() {
         dy = dy*(1.+2.*OVERFLOW);
         // Pixel coordinates are now in [-.1,1.1]^2
         // The extra padding makes for nicer nullcline plots
-        
         // Bottom left: Draw nullclines with state density histogram 
         if (XY.x<1.) {
             vec2 zm2 = clamp(zm,0.,1.);
@@ -353,7 +364,13 @@ void main() {
             vec2 dUx   = dU_steady_state(zm+dx);
             vec2 signs = vec2(lessThanEqual(min(dU*dUx,dU*dUy),vec2(0.0,0.0)));
             vec4 c3    = vec4(clamp(signs.y+signs.x,0.0,1.0));
-            gl_FragColor = d + c3*(vec4(signs.yx,0.0,0.0)-d);
+            // Originally red (x) was I cells and green (y) was E cells
+            //gl_FragColor = d + c3*(vec4(signs.yx,0.0,0.0)-d);
+            // 20230612 I changed this to match the color map scheme
+            // E cells are magenta
+            // I cells are cyan
+            vec4 newcolor = vec4(0.0,0.7,0.7,0.0)*signs.y + vec4(1.0,0.0,0.7,0.0)*signs.x;
+            gl_FragColor = d + c3*(newcolor-d);
         }
         // Bottom right: Draw dispersion relation from linearized system 
         else if (XY.x>1.) {
@@ -563,11 +580,11 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
         </div>
         <!-- x-axis label for plot on bottom left -->
         <div id="ax1xlabel" class="axislabel" style='bottom:-512px;left:200px;width:256px;'>
-            <b><font color="#0f0">E-cell</font></b> firing rate
+            <b><font color="#F08">E-cell</font></b> firing rate
         </div>
         <!-- y-axis label for plot on bottom left -->
         <div id="ax1ylabel" class="axislabel" style='bottom:-394px;left:82px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);'>
-            <b><font color="#F00">I-cell</font></b> firing rate
+            <b><font color="#0BB">I-cell</font></b> firing rate
         </div>
         <!-- y-axis label for plot on bottom left 512-.1/(1.2/256) -->
         <div id="ax1ytick0" class="axislabel" style='bottom:-496px;left:82px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);'>
@@ -674,12 +691,6 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
             retinal waves</a>.
             <br/>
             <br/>
-            <b>Note:</b> Beware forward-Euler integration, especially with 
-            limit cycles (where the error is always excitatory). 
-            Do not set Δt larger than 1/10th the shortest time constant. 
-            Values larger than 1/5th the shortest time consant are unstable.
-            <br/>
-            <br/>
             This code uses webGL shaders and encodes floats as 16-bit fixed point
             in an ad-hoc way. 
             Results are for demonstration and exploration only and not guaranteed
@@ -714,20 +725,30 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
 //['Rule Stoffregen Ermentrou 2011 A',''].
 //['Rule Stoffregen Ermentrou 2011 B',''].
 presets=[
-['solved it!','waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=8;Se=8;Sl=0;Aii=0.4;Aie=8;Aee=7.275;Aei=2;Ti=9;Te=3;Hi=3.85;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.7;f=15;stimsize=0.3;stimradius=0.4;tskip=10;dt=.2;bradius=0.4;bhardness=1;'],
-['Fun ripples','waveform="sine";Wii=0;Wie=5;Wee=8.2;Wei=4.49;Si=0.8;Se=5;Sl=0;Aii=0;Aie=0;Aee=1.1;Aei=0;Ti=2.1;Te=2.3;Hi=2.55;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=90;bi=0.9;ae=10;gammae=10;be=0.8;Amp=0;f=25;stimsize=0.1;stimradius=0.4;tskip=5;dt=0.3;bradius=1;bhardness=1;'],
+['model v2',
+'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=7;Se=7;Sl=0;Aii=0.5;Aie=8;Aee=7.275;Aei=2;Ti=7.5;Te=3;Hi=3.85;He=2.675;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.9;f=19;stimsize=0.3;stimradius=0.4;tskip=5;dt=0.2;bradius=0.45;bhardness=1;'],
+['model v2b',
+'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=7;Se=7;Sl=0;Aii=0.5;Aie=8;Aee=7.275;Aei=2;Ti=7.5;Te=3;Hi=3.85;He=2.675;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=01;f=8;stimsize=0.4;stimradius=0.3;tskip=15;dt=0.2;bradius=0.5;bhardness=1;'],
+['model v2 DC',
+'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=5;Se=5;Sl=0;Aii=0.5;Aie=8;Aee=7.275;Aei=2;Ti=7.5;Te=3;Hi=3.85;He=2.675;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.2;f=0;stimsize=0.3;stimradius=0.3;tskip=5;dt=0.2;bradius=0.45;bhardness=1;'],
+['model v1',
+'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=8;Se=8;Sl=0;Aii=0.4;Aie=8;Aee=7.275;Aei=2;Ti=9;Te=3;Hi=3.85;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.7;f=15;stimsize=0.3;stimradius=0.4;tskip=10;dt=0.2;bradius=0.4;bhardness=1;'],
+['Fun ripples',
+'waveform="sine";Wii=0;Wie=5;Wee=8.2;Wei=4.49;Si=0.8;Se=5;Sl=0;Aii=0;Aie=0;Aee=1.1;Aei=0;Ti=2.1;Te=2.3;Hi=2.55;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=90;bi=0.9;ae=10;gammae=10;be=0.8;Amp=0;f=25;stimsize=0.1;stimradius=0.4;tskip=5;dt=0.3;bradius=1;bhardness=1;'],
 ['Forest_Fire_0','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=3;Aie=18;Ti=5.8;Hi=5.5;Gi=0;Si=0.4;Ni=0;ai=2.7;bi=7.6;Aee=11.1;Aei=5.3;Te=2;He=3.1;Ge=0;Se=0.5;Ne=0.1;ae=1000;gammae=2;be=0.5;dt=2;Amp=11;f=0;bradius=1;bhardness=1;'],
 ['Forest_Fire_I','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=2.9;Aie=18;Ti=4.1;Hi=6.3;Gi=0;Si=0;Ni=0;ai=5;bi=0;Aee=11.2;Aei=5;Te=2;He=3.3;Ge=0;Se=1;Ne=0.2;ae=500;gammae=2;be=0;dt=2;Amp=11;f=0;bradius=1;bhardness=1;'],
 ['Forest_Fire_II','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=1;Aie=15.8;Ti=13;Hi=5.9;Gi=0;Si=0;Ni=0.1;ai=2;bi=7;Aee=9.8;Aei=5;Te=2;He=2.9;Ge=0;Se=0.6;Ne=0.2;ae=1000;gammae=2;be=1;dt=1.7;Amp=11;f=0;bradius=1;bhardness=1;'],
-['flicker: spots','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=2;Aii=3;Aie=12;Aee=10.5;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0.6;f=6.8;stimsize=100;stimradius=0;tskip=2;dt=.5;bradius=100;bhardness=1;'],
-['flicker: stripes','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=2;Aii=3;Aie=12;Aee=10.5;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0.6;f=18;stimsize=100;stimradius=0;tskip=2;dt=.5;bradius=100;bhardness=1;'],
+['flicker: spots',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2.5;Se=1;Sl=2;Aii=3;Aie=12;Aee=10;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=.7;f=8;stimsize=100;stimradius=0;tskip=20;dt=0.1;bradius=100;bhardness=1;'],
+['flicker: stripes',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=2;Aii=3;Aie=12;Aee=10.5;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0.6;f=18;stimsize=100;stimradius=0;tskip=2;dt=.5;bradius=100;bhardness=1;'],
 ['Psychedelic','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=13;Aei=14.5;Ti=12.5;Hi=3.5;Gi=0;Si=2.9;Ni=0;ai=100;bi=0;Aee=16.1;Aie=13.7;Te=4;He=3.1;Ge=0;Se=2;Ne=.75;ae=50;be=0;dt=1;Amp=0;f=0;bradius=1;bhardness=1;'],
 ['Rare_Waves','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=13;Aie=14.5;Ti=13;Hi=3.5;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=17.2;Aei=13.7;Te=4;He=3.1;Ge=0;Se=3;Ne=1;ae=50;be=1.3;dt=1;Amp=0;f=0;bradius=1;bhardness=1;'],
 ['Oscillators','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5;Ti=20;Hi=2.5;Gi=0;Si=1;Ni=0.5;ai=100;bi=0;Aee=8;Aei=5;Te=10;He=1;Ge=10;Se=1;Ne=0.5;ae=100;be=1;dt=1;Amp=0;f=6.8;bradius=1;bhardness=1;'],
 ['Chaos','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=11.7;Aie=20;Ti=36;Hi=4.4;Gi=0.3;Si=1;Ni=0;ai=50;bi=0;Aee=14.5;Aei=10;Te=10;He=2.9;Ge=0.6;Se=3;Ne=.1;ae=50;be=1;dt=1;Amp=0;f=6.8;bradius=1;bhardness=1;'],
 ['Prickles','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=11.7;Aie=20;Ti=80;Hi=0.6;Gi=0.3;Si=5;Ni=0;ai=12;bi=0;Aee=15.5;Aei=10;Te=5;He=2.2;Ge=0.6;Se=1;Ne=1;ae=4;be=1.4;dt=1;Amp=0;f=6.8;bradius=1;bhardness=1;'],
 ['Goldfish','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=11.7;Aie=20;Ti=80;Hi=0.6;Gi=0.3;Si=5;Ni=0;ai=12;bi=0;Aee=15.5;Aei=10;Te=5;He=2.2;Ge=0.6;Se=1;Ne=1;ae=140;be=2.8;dt=1.4;Amp=0;f=6.8;bradius=1;bhardness=1;'],
-['Canard Chaos','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=20;Ti=20;Hi=3.7;Gi=0.3;Si=0.7;Ni=0;ai=12;bi=0.6;Aee=14.1;Aei=10;Te=5;He=1.8;Ge=0.6;Se=0.7;Ne=.1;ae=100;be=0.5;dt=1;Amp=0;f=6.8;bradius=1;bhardness=1;'],
+['Chaos','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=20;Ti=20;Hi=3.7;Gi=0.3;Si=0.7;Ni=0;ai=12;bi=0.6;Aee=14.1;Aei=10;Te=5;He=1.8;Ge=0.6;Se=0.7;Ne=.1;ae=100;be=0.5;dt=1;Amp=0;f=6.8;bradius=1;bhardness=1;'],
 ['Oscillate','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=2.74;Ti=1.9;Hi=1.2;Gi=0;Si=.1;Ni=0;ai=9;bi=0;Aee=8;Aei=5.1;Te=1;He=0.1;Ge=0;Se=2;Ne=0.2;ae=200;be=2.2;dt=1;Amp=0;f=6.8;bradius=1;bhardness=1;'],
 ['Mycelium','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5;Ti=4;Hi=2.1;Gi=0.3;Si=2.6;Ni=0;ai=12;bi=1.1;Aee=12.6;Aei=9.6;Te=1;He=1.7;Ge=0.6;Se=.8;Ne=0.4;ae=1000;gammae=50;be=4.5;dt=1;Amp=0;f=6.8;bradius=1;bhardness=1;'],
 ['?','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5;Ti=4;Hi=2.1;Gi=0.3;Si=2.6;Ni=0;ai=12;bi=1.1;Aee=12.6;Aei=9.6;Te=1;He=1.7;Ge=0.6;Se=.8;Ne=0.4;ae=1000;gammae=50;be=5.5;dt=1;Amp=0.3;f=50;bradius=1;bhardness=1;'],
@@ -742,73 +763,38 @@ presets=[
 ['Quasicycles 2','Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5.5;Ti=25;Hi=2;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=8.5;Aei=5;Te=4;He=1.9;Ge=10;Se=8;Ne=0.4;ae=100;gammae=100;be=0;dt=2.9;Amp=0;f=6.8;bradius=1;bhardness=1;'],
 ['Stripe waves', 'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=2;Aii=6;Aie=14.3;Aee=8.8;Aei=11.3;Ti=40.2;Te=3.1;Hi=7;He=2.8;Gi=0;Ge=1;Ni=0.1;Ne=0.7;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0;f=6.8;dt=.1;tskip=20;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
 ['Does not propagate', 'waveform="sine";Wii=0;Wie=4.8;Wee=8.22;Wei=4.5;Si=0.8;Se=10;Sl=1.2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0.1;ae=1;gammae=1;be=0.1;Amp=1.2;f=7;dt=0.3;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.4;bhardness=1;'],
-['Threshold','waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=0.8;Se=5;Sl=1.2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=2;dt=0.3;tskip=10;stimsize=0.1;stimradius=0.9;bradius=0.4;bhardness=1;'],
-['Beautiful','waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.49;Si=.8;Se=5;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=25;dt=0.3;tskip=5;stimsize=0.1;stimradius=0.4;bradius=0.4;bhardness=1;'],
+['Threshold',
+'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=0.8;Se=5;Sl=1.2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=2;dt=0.3;tskip=10;stimsize=0.1;stimradius=0.9;bradius=0.4;bhardness=1;'],
+['Beautiful',
+'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.49;Si=.8;Se=5;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=25;dt=0.3;tskip=5;stimsize=0.1;stimradius=0.4;bradius=0.4;bhardness=1;'],
 ['Fine tuned',
 'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=1.7;Te=2.2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=25;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.8;bradius=0.8;bhardness=1;'],
 ['Unusual',
 'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=4.8;Se=3;Sl=2;Aii=6;Aie=17.8;Aee=11.7;Aei=5.6;Ti=5.8;Te=2;Hi=7.6;He=3.6;Gi=0;Ge=1;Ni=0;Ne=0;ai=2.7;bi=0;ae=1000;gammae=2;be=0;Amp=1.5;f=4;dt=0.5;tskip=20;stimsize=0.8;stimradius=1;bradius=0.45;bhardness=1;'],
-['wave explore 37',
-'waveform="sine";Wii=0;Wie=4.7;Wee=8.4;Wei=5.3;Si=4.1;Se=17.8;Sl=2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.88975;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=10;gammae=10;be=0;Amp=5;f=2;dt=0.5;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.45;bhardness=1;'],
-['wave explore 36',
-'waveform="sine";Wii=0;Wie=4.6;Wee=8.4;Wei=5.4;Si=4.1;Se=17.8;Sl=2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.88975;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=10;gammae=10;be=0;Amp=5;f=40;dt=0.5;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.45;bhardness=1;'],
-['wave explore 35',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.5;Wei=5.3;Si=4.1;Se=17.8;Sl=2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.88975;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=10;gammae=10;be=0;Amp=5;f=5;dt=0.2;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.45;bhardness=1;'],
-['wave explore 34',
-'waveform="sine";Wii=0;Wie=5;Wee=8.3;Wei=5;Si=4.1;Se=17.8;Sl=2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=3;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0;f=5;dt=0.2;tskip=20;stimsize=0.3;stimradius=0.6;bradius=0.45;bhardness=1;'],
-['wave explore 33',
-'waveform="sine";Wii=0;Wie=4.7;Wee=8.7;Wei=5.1;Si=4;Se=15;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=16;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.6;bradius=0.45;bhardness=1;'],
-['wave explore 32',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=18;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.8;bradius=0.4;bhardness=1;'],
-['wave explore 31',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=18;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.8;bradius=0.8;bhardness=1;'],
-['wave explore 30',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10;Sl=0.5;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=15;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.6;bradius=0.7;bhardness=1;'],
-['wave explore 29',
-'waveform="sine";Wii=0;Wie=4.7;Wee=8.2;Wei=4.5;Si=4;Se=10;Sl=0.5;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2;Te=2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=15;dt=.2;tskip=20;stimsize=0.2;stimradius=0.6;bradius=0.25;bhardness=0.975;'],
-['wave explore 28', 'Wii=0;Wie=2;Wee=4;Wei=2;Si=2;Se=8;Sl=2;Aii=0;Aie=2;Aee=4;Aei=2;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.25;bhardness=0.95;'],
-['wave explore 27',
-'waveform="sine";Sl=2.0;Wii=0;Wie=3;Wee=4;Wei=2;Si=7.2;Se=6;Aii=0;Aie=1;Aee=4;Aei=2;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.55;bhardness=0.95;'],
-['wave explore 26',
-'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=4;Wei=0;Si=0.1;Se=0.1;Aii=0;Aie=4;Aee=4;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=20;dt=0.2;tskip=10;stimsize=0.2;stimradius=0.6;bradius=0.35;bhardness=0.95;'],
-['wave explore 25',
-'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=4;Wei=0;Si=0.5;Se=3;Aii=0;Aie=4;Aee=4;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.3;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
-['wave explore 24', 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Si=3;Se=5;Aii=0;Aie=4;Aee=8;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.3;stimradius=0.6;bradius=.5;bhardness=0.95;'],
-['wave explore 23', 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Si=1;Se=2;Aii=0;Aie=4;Aee=8;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=10;dt=0.1;tskip=10;stimsize=0.5;stimradius=0.6;bradius=.5;bhardness=0.95;'],
-['wave explore 22', 'waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=8;Wei=0;Si=1;Se=2;Aii=0;Aie=4;Aee=0;Aei=4;Ti=1;Te=1;Hi=2;He=2;Gi=0;Ge=0.2;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0;f=50;dt=0.05;tskip=10;stimsize=0.6;stimradius=0;bradius=1;bhardness=0.95;'],
-['wave explore 21','waveform="sine";Sl=2.0;Wii=0.4;Wie=0;Wee=0.5;Wei=0;Aii=0;Aie=3.3;Aee=8.8;Aei=5.7;Ti=1.9;Te=1;Hi=1.85;He=1.6;Gi=0;Ge=0.2;Si=0.6;Se=2.3;Ni=0;Ne=0.1;ai=9;bi=0;ae=100;gammae=1;be=1.3;Amp=1;f=50;dt=0.05;tskip=10;stimsize=0.6;stimradius=0;bradius=1;bhardness=0.95;'],
-['wave explore 20','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0.32;Wei=0;Aii=0;Aie=3.3;Aee=8.9;Aei=5.7;Ti=1.9;Te=1;Hi=1.7;He=1.4;Gi=0;Ge=0;Si=0.9;Se=0.8;Ni=0;Ne=0.1;ai=9;bi=0;ae=20;gammae=1;be=0.9;Amp=8.6;f=6.5;dt=0.1;tskip=10;stimsize=0.8;stimradius=0.6;bradius=1;bhardness=0.95;'],
-['wave explore 19','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0.1;Wei=0;Aii=3.8;Aie=7;Aee=13.1;Aei=10.2;Ti=10.5;Te=8.2;Hi=1.9;He=1.8;Gi=0;Ge=1;Si=6.1;Se=12;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0.7;f=18;dt=0.5;tskip=10;stimsize=0.8;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
-['wave explore 18','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Aii=7.9;Aie=18;Aee=10.4;Aei=5.3;Ti=5.8;Te=2;Hi=7.5;He=3.4;Gi=0;Ge=0;Si=5;Se=2;Ni=0;Ne=1.1;ai=2.7;bi=0.8;ae=1000;gammae=2;be=0.3;Amp=0;f=0;dt=0.7;tskip=10;stimsize=0.8;stimradius=0.6;bradius=1;bhardness=0.95;'],
-['wave explore 17','waveform="sine";Sl=2.0;Wii=0;Wie=0;Wee=0;Wei=0;Aii=3.8;Aie=7;Aee=12.9;Aei=10.2;Ti=10.5;Te=9.4;Hi=1.9;He=1.8;Gi=0;Ge=1;Si=0.1;Se=8;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=-0.1;Amp=1;f=8;dt=0.5;tskip=10;stimsize=0.5;stimradius=0.6;bradius=0.5;bhardness=0.95;'],
-['wave explore 16','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=3.5;Aie=6.8;Aee=13.5;Aei=9.6;Ti=10;Te=10;Hi=1.6;He=2;Gi=0;Ge=1;Si=.1;Se=5;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=15;f=8;dt=0.5;tskip=10;stimsize=0.5;stimradius=0.6;bradius=.5;bhardness=0.95;'],
-['wave explore 15','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Aee=15.5;Aei=11.5;Ti=1;Te=2;Hi=4.8;He=3.2;Gi=0;Ge=1;Si=7;Se=4.7;Ni=0;Ne=0.4;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0;f=200;dt=0.3;tskip=1;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
-['wave explore 14','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10.3;Aee=12.2;Aei=11.5;Ti=1;Te=1;Hi=4.8;He=2.8;Gi=0;Ge=1;Si=6;Se=2.6;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=1;be=0;Amp=0;f=105;dt=0.2;tskip=1;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
-['wave explore 13','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10.3;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.2;Aei=11.5;Te=1;He=3;Ge=1;Se=15;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=10;f=105;bradius=1;bhardness=1;'],
-['wave explore 12','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.05;Amp=2;f=370;bradius=1;bhardness=1;'],
-['wave explore 11','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=6;Ti=3;Hi=2.7;Gi=0;Si=2;Ni=0;ai=1;bi=0;Aee=7;Aei=6;Te=1;He=0.9;Ge=1;Se=.6;Ne=0.1;ae=1;gammae=1;be=0;dt=.2;Amp=10;f=90;bradius=1;bhardness=1;'],
-['wave explore 10','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=1;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;bradius=1;bhardness=1;'],
-['wave explore 9','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=5.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.9;Aei=8.8;Te=1;He=3.5;Ge=1;Se=2;Ne=0.1;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=100;bradius=1;bhardness=1;'],
-['wave explore 8','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.7;Aei=11.5;Te=1;He=3;Ge=1;Se=2;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=1;f=200;bradius=1;bhardness=1;'],
-['wave explore 7','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=10;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=11.4;Aei=11;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=.1;Amp=10;f=50;bradius=1;bhardness=1;'],
-['wave explore 6','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=3;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;bradius=1;bhardness=1;'],
-['wave explore 5','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=200;bradius=1;bhardness=1;'],
-['wave explore 4','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.3;Amp=1;f=280;bradius=1;bhardness=1;'],
-['wave explore 3','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;bradius=1;bhardness=1;'],
-['wave explore 2','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=5;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.2;Amp=1;f=320;bradius=1;bhardness=1;'],
-['wave explore 1','waveform="sine";Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=11.7;Ti=1;Hi=4.8;Gi=0;Si=1;Ni=0;ai=1;bi=0;Aee=12.7;Aei=11.5;Te=1;He=3;Ge=1;Se=5;Ne=0;ae=1;gammae=1;be=0;dt=0.1;Amp=1;f=160;bradius=1;bhardness=1;'],
-['ghostglider','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.2;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['flameflicker','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0;Se=2.9;Sl=1.5;Aii=4.3;Aie=20.3;Aee=11.8;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.3;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['plasma','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0.2;Se=2.9;Sl=1.5;Aii=4.5;Aie=20.3;Aee=11.8;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.1;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.2;bradius=1;bhardness=1;'],
-['physarisce','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.1;Se=4;Sl=1.7;Aii=5.9;Aie=20.3;Aee=11.4;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.7;ai=5;bi=3.8;ae=100;gammae=2;be=0.4;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.4;bradius=1;bhardness=1;'],
-['shiver','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2.1;Se=1.7;Sl=0.8;Aii=5.6;Aie=20.3;Aee=12;Aei=5.1;Ti=4.7;Te=2.6;Hi=6.2;He=3.25;Gi=0;Ge=0;Ni=0;Ne=0.7;ai=5;bi=3.8;ae=100;gammae=2.1;be=0.8;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.4;bradius=1;bhardness=1;'],
-['ghostlight','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.9;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['gostlight2','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.5;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=11.1;Te=4.3;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['stepwise','waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0;Se=2.7;Sl=1.5;Aii=3.9;Aie=20.6;Aee=11.8;Aei=5.2;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0.4;Ni=0;Ne=0.4;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=2;stimsize=0.1;stimradius=0;tskip=2;dt=0.5;bradius=1;bhardness=1;'],
-['nebula','waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=0.8;Se=5;Sl=1.2;Aii=0;Aie=0;Aee=0.9;Aei=0;Ti=2.1;Te=2.3;Hi=2.475;He=2.4;Gi=0;Ge=1;Ni=0.2;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1.1;f=1;stimsize=0.2;stimradius=0.6;tskip=16;dt=0.7;bradius=1;bhardness=1;'],
-['20230524','waveform="sine";Wii=2.6;Wie=0;Wee=6.8;Wei=0;Si=0;Se=0;Sl=4;Aii=0;Aie=5.1;Aee=0;Aei=3.4;Ti=30;Te=10;Hi=2.275;He=2.125;Gi=0;Ge=2;Ni=0;Ne=0;ai=10;bi=0.2;ae=10;gammae=10;be=0.2;Amp=0.4;f=5;stimsize=0.2;stimradius=0.3;tskip=10;dt=0.5;bradius=0.4;bhardness=1;'],
-['20230525','waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=0.1;Se=4.7;Sl=0;Aii=0.2;Aie=4;Aee=7.8;Aei=4.3;Ti=20;Te=10;Hi=1.575;He=1.55;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=1;f=12;stimsize=0.3;stimradius=0.4;tskip=10;dt=1;bradius=0.4;bhardness=1;'],
-['solved it!','waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=8;Se=8;Sl=0;Aii=0.4;Aie=8;Aee=7.275;Aei=2;Ti=9;Te=3;Hi=3.85;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.7;f=15;stimsize=0.3;stimradius=0.4;tskip=10;dt=.2;bradius=0.4;bhardness=1;']
+['ghostglider',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.2;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
+['flameflicker',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0;Se=2.9;Sl=1.5;Aii=4.3;Aie=20.3;Aee=11.8;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.3;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
+['plasma',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0.2;Se=2.9;Sl=1.5;Aii=4.5;Aie=20.3;Aee=11.8;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.1;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.2;bradius=1;bhardness=1;'],
+['physarisce',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.1;Se=4;Sl=1.7;Aii=5.9;Aie=20.3;Aee=11.4;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.7;ai=5;bi=3.8;ae=100;gammae=2;be=0.4;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.4;bradius=1;bhardness=1;'],
+['shiver',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2.1;Se=1.7;Sl=0.8;Aii=5.6;Aie=20.3;Aee=12;Aei=5.1;Ti=4.7;Te=2.6;Hi=6.2;He=3.25;Gi=0;Ge=0;Ni=0;Ne=0.7;ai=5;bi=3.8;ae=100;gammae=2.1;be=0.8;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.4;bradius=1;bhardness=1;'],
+['ghostlight',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.9;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
+['gostlight2',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.5;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=11.1;Te=4.3;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
+['stepwise',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0;Se=2.7;Sl=1.5;Aii=3.9;Aie=20.6;Aee=11.8;Aei=5.2;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0.4;Ni=0;Ne=0.4;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=2;stimsize=0.1;stimradius=0;tskip=2;dt=0.5;bradius=1;bhardness=1;'],
+['nebula',
+'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=0.8;Se=5;Sl=1.2;Aii=0;Aie=0;Aee=0.9;Aei=0;Ti=2.1;Te=2.3;Hi=2.475;He=2.4;Gi=0;Ge=1;Ni=0.2;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1.1;f=1;stimsize=0.2;stimradius=0.6;tskip=16;dt=0.7;bradius=1;bhardness=1;'],
+['20230524',
+'waveform="sine";Wii=2.6;Wie=0;Wee=6.8;Wei=0;Si=0;Se=0;Sl=4;Aii=0;Aie=5.1;Aee=0;Aei=3.4;Ti=30;Te=10;Hi=2.275;He=2.125;Gi=0;Ge=2;Ni=0;Ne=0;ai=10;bi=0.2;ae=10;gammae=10;be=0.2;Amp=0.4;f=5;stimsize=0.2;stimradius=0.3;tskip=10;dt=0.5;bradius=0.4;bhardness=1;'],
+['20230525',
+'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=0.1;Se=4.7;Sl=0;Aii=0.2;Aie=4;Aee=7.8;Aei=4.3;Ti=20;Te=10;Hi=1.575;He=1.55;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=1;f=12;stimsize=0.3;stimradius=0.4;tskip=10;dt=1;bradius=0.4;bhardness=1;'],
+['solved it!',
+'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=8;Se=8;Sl=0;Aii=0.4;Aie=8;Aee=7.275;Aei=2;Ti=9;Te=3;Hi=3.85;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.7;f=15;stimsize=0.3;stimradius=0.4;tskip=10;dt=.2;bradius=0.4;bhardness=1;']
 ]
 
 function main() {
@@ -961,7 +947,7 @@ function main() {
     
     // Simulus
     const heav = (z)=>(z<.0?.0:z==.0?.5:1.);
-    const Stim = (t)=> ((waveform=="square")? heav(Math.sin(2*Math.PI*t*f/1000.)-Str) : Math.sin(2*Math.PI*t*f/1000.) )*Amp;
+    const Stim = (t)=> ((waveform=="square")? heav(Math.sin(2*Math.PI*t*f/1000.)-Str) : (Math.sin(2*Math.PI*t*f/1000.) )+1)*0.5*Amp;
     const F  = (x)=>1/(1+Math.exp(-x));
     const dF = (x)=>F(x)*F(-x);
     
@@ -1160,8 +1146,8 @@ function main() {
             Hi : Hi,  // Bias in I cell synaptic input (threshold)
             bi : bi,  // Strength of Inhibitory adaptation
             be : be,  // Strength of Excitatory adaptation
-            Ue0 : Ue0,
-            Ui0 : Ui0, 
+            Ue0: Ue0,
+            Ui0: Ui0, 
         })[0];
         color = buildRasterProgram(gl,color_header+$('colormap').text);
 
@@ -1257,6 +1243,7 @@ function main() {
         var ps = document.createElement("div");
         ps.setAttribute("class","squarebutton");
         ps.innerHTML = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzαβγδεφθιηκλμνπϟρστυωξζ'[i];
+        //ps.innerHTML = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヰヱヲ'[i];
         var st = document.createElement("div");
         st.setAttribute("class","info");
         st.innerHTML = name;

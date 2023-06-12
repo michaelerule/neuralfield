@@ -187,7 +187,7 @@ input[type=number] {
     left:5px;
     top:5px;
     width:200px;
-    color:#888;
+    color:#fff;
     font-color:#888;
     text-align: left;
     vertical-align: top;
