@@ -59,6 +59,7 @@ A {
     width:200px;
     height:712px;
     float:left;
+    z-index:100;
 }
 .controls {
     width:100px;
@@ -66,7 +67,7 @@ A {
 }
 .axislabel {
     position:absolute;
-    z-index:2;
+    z-index:1;
     text-align:center;
     font-size:70%;
     height:15px;
@@ -133,6 +134,7 @@ input[type=number] {
     font-color:#fff;
     border:solid 1px #777;
     padding: 1px 1px 1px 1px;
+    z-index: 100;
 }
 .button_container {
     margin-top:4px;

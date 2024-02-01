@@ -10,7 +10,6 @@
 <script src="../lib/gpurand.js"></script>
 <script src="../lib/parameters.js"></script>
 <link rel="stylesheet" type="text/css" href="wc.css">
-<link rel="stylesheet" type="text/css" href="wcv2.css">
 <title>Wilson-Cowan on the GPU and in your browser</title>
 
 <!-- import the MathJax scripts -->
@@ -37,6 +36,12 @@ sampler2D masks;
 float dt;  // Euler integrator time step
 float Te;  // Excitatory population time constant (ms)
 float Ti;  // Inhibitory population time constant (ms)
+float due; // Excitatory rate direct diffusion
+float dui; // Inhibitory rate direct diffusion
+float dve; // Excitatory adaptation direct diffusion
+float dvi; // Inhibitory adaptation direct diffusion
+float re;  // Excitatory maximum rate
+float ri;  // Inhibitory maximum rate
 float Aee; // E-E coupling
 float Aie; // Excitation of Inhibitory coupling
 float Aei; // Inhibition of Excitatory coupling
@@ -84,9 +89,9 @@ void main() {
         vec4 n  = texture2D(noise, XY)*0.999+0.0001; // uniform noise
         vec2 R  = sqrt(-2.*log(n.xy));  // Transform uniform noise
         vec2 T  = twopi*n.zw;           // into Gaussian using Box-
-        N = vec2(R*cos(T))*sqrt(dt); // Muller transform.
+        N = vec2(R*cos(T))*sqrt(dt);    // Muller transform.
     }   
-    // This isn't quite correct but is ... close enough
+    // This isn't quite correct but is ... close enough?
     N = N*sqrt(dt);
     // Unpack state from texture information
     // using two channels per float (16 bit fixed point)
@@ -103,16 +108,16 @@ void main() {
     vec4 m = texture2D(masks,XY);
     // Normalize convoltion near boundary
     // Note 20230523: I've removed this to pull boundary to zero
-    //Ce = Ce/m.y;
-    //Ci = Ci/m.z;
-    //Le = Le/m.w;
-    //Li = Li/m.w;
+    Ce = Ce/m.y;
+    Ci = Ci/m.z;
+    Le = Le/m.w;
+    Li = Li/m.w;
     // Stimulus
     float  d = length(XY-vec2(0.5,0.5)+vec2(0.5,0.5)*stimradius);
     float s2 = s*exp(-(d*d)*stimsize);
     // Firing rates
-    float Ae  = F(Wee*Le-Wei*Li+Aee*Ce-Aei*Ci-He+Ge*s2-Ve*be+Ne*N.x);
-    float Ai  = F(Wie*Le-Wii*Li+Aie*Ce-Aii*Ci-Hi+Gi*s2-Vi*bi+Ni*N.y);
+    float Ae  = re*F(Wee*Le-Wei*Li+Aee*Ce-Aei*Ci-He+Ge*s2-Ve*be+Ne*N.x);
+    float Ai  = ri*F(Wie*Le-Wii*Li+Aie*Ce-Aii*Ci-Hi+Gi*s2-Vi*bi+Ni*N.y);
     // Forward Euler
     //float Ue_out = Ue + (Ae - Ue)*(dt/Te);
     //float Ui_out = Ui + (Ai - Ui)*(dt/Ti);
@@ -231,7 +236,6 @@ void main() {
 </script>
 
 <script id="colormap-parameters" type="x-fragment-parameters">
-// COLOR MAP KERNEL, ALSO RENDERS THE PHASE PLANES
 sampler2D Uin;
 sampler2D Vin;
 sampler2D hist; //;
@@ -281,19 +285,17 @@ vec2 dU_full_adaptation(vec2 u) {
         F((Wie+Aie)*u.x-bi-(Wii+Aii)*u.y-Hi)-u.y);
 }
 vec4 eigvals(vec2 u) {
-    // u is pixel coords in [0,1]^2 or [-.1,1.1]^2
+    // u is probably pixel coords in [0,1]^2 or [-.1,1.1]^2
     // u.x = ν should be the spatial frequency axis, with units of inverse pixels
     // u.y = ω should be the temporal frequency axis, with units of 1/τ_e
-    float v = u.x*4.0;
-    // Calculate the spatial coupling kernel Fourier coefficients
+    float v = u.x;
+    
     float se  = Se*v;
     float si  = Si*v;
     float s2  = Sl*v;
     float Re  = exp(-0.5*se*se);
     float Ri  = exp(-0.5*si*si);
     float R2  = exp(-0.5*s2*s2);
-    // Ue0, Ui0 are user-suppled parameters: point around which to perturb
-    // This gets the local slopes at said point
     float dUe = dF((Wee+Aee)*Ue0 - be*Ue0 - (Wei+Aei)*Ui0 - He);
     float dUi = dF((Wie+Aie)*Ue0 - bi*Ui0 - (Wii+Aii)*Ui0 - Hi);
     float a = (  (Wee*R2 + Aee * Re) * dUe - be * dUe - 1.0)/Te;
@@ -301,7 +303,7 @@ vec4 eigvals(vec2 u) {
     float c = (  (Wie*R2 + Aie * Re) * dUi )/Ti;
     float d = ( -(Wii*R2 + Aii * Ri) * dUi - bi * dUi - 1.0)/Ti;
     float r = 0.5*(a+d);
-    float D = (a+d)*(a+d)*0.25 - (a*d-b*c);
+    float D = (a+d)*(a+d)/4.0 - (a*d-b*c);
     
     // Real part determins stability
     float realdelta = sqrt(max(D,0.0));
@@ -316,10 +318,10 @@ vec4 eigvals(vec2 u) {
     // The first two return fields handle real eigenvalues (possibly two distinct ones)
     // The second two return fields handle the imaginary parts of complex-conjugate paired eigenvalues
     return vec4(
-        F(1.*(r1*Te)) - u.y, 
-        F(1.*(r2*Te)) - u.y, 
-        F(8.*( imdelta*Te)) - u.y, 
-        F(8.*(-imdelta*Te)) - u.y
+        F(2.*(r1*Te)) - u.y, 
+        F(2.*(r2*Te)) - u.y, 
+        F(2.*( imdelta*Te)) - u.y, 
+        F(2.*(-imdelta*Te)) - u.y
     );
 }
 float yticks(float y) {
@@ -384,13 +386,11 @@ void main() {
                 vec4 dUx   = eigvals(zm+dx);
                 vec4 signs = vec4(lessThanEqual(min(dU*dUx,dU*dUy),vec4(0.,0.,0.,0.)));
                 gl_FragColor.rgb = 
-                    // Real parts in pink
                     vec3(.8,.2,.6)*min(signs.x+signs.y,1.0) + 
-                    // Imaginary parts in cyan
                     vec3(.2,.8,.6)*min(signs.z+signs.w,1.0) + 
-                    // Sigmoid-wrapped y ticks in gray
+                    // Sigmoid-wrapped y ticks
                     vec3(.3,.3,.3)*float(yticks(zm.y)*yticks(zm.y+dy.y)<=0.&&abs(zm.y-.5)<.48)+
-                    // Zero line in white
+                    // Zero line
                     vec3(1.,1.,1.)*float((zm.y<0.5)&&(zm.y+dy.y>=0.5));
             }
         }
@@ -479,6 +479,30 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
             </div>
             <div class="controls">
                 <div class="control">$\tau_e$<input type="number" step="0.1" max="100" min="0" name="Te" value="10.0"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Diffusion constants
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control"><span style="font-size:100%">$D_{u_i}$</span><input type="number" step="0.1" max="100" min="0" name="dui" value="0.0"/></div>
+                <div class="control"><span style="font-size:100%">$D_{v_i}$</span><input type="number" step="0.1" max="100" min="0" name="dvi" value="0.0"/></div>
+            </div>
+            <div class="controls">
+                <div class="control"><span style="font-size:100%">$D_{u_e}$</span><input type="number" step="0.1" max="100" min="0" name="due" value="0.0"/></div>
+                <div class="control"><span style="font-size:100%">$D_{v_e}$</span><input type="number" step="0.1" max="100" min="0" name="dve" value="0.0"/></div>
+            </div>
+        </div>
+        <div class="controltext">
+            Maximum rates
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control"><span style="font-size:100%">$r_i$</span><input type="number" step="0.1" max="1" min="0" name="ri" value="1.0"/></div>
+            </div>
+            <div class="controls">
+                <div class="control"><span style="font-size:100%">$r_e$</span><input type="number" step="0.1" max="1" min="0" name="re" value="1.0"/></div>
             </div>
         </div>
         <div class="controltext">
@@ -600,7 +624,7 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
             1
         </div>
         <!-- x-axis label for plot on bottom left 200+.1/(1.2/256) = 221.33333333333334 -->
-        <div id="ax1xtick0"class="axislabel" style='bottom:-512px;left:221px;'>
+        <div id="ax1xtick0" class="axislabel" style='bottom:-512px;left:221px;'>
             0
         </div>
         <!-- x-axis label for plot on bottom left 200+1.1/(1.2/256) = 434.6666666666667 -->
@@ -613,11 +637,11 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
         </div>
         <!-- x-axis label for plot on bottom right -->
         <div id="ax2xlabel" class="axislabel" style='bottom:-512px;left:456px;width:256px;'>
-            Angular spatial frequency
+            Angular spatial frequency (1/pixels)
         </div>
         <!-- y-axis label for plot on bottom right -->
         <div id="ax2ylabel" class="axislabel" style='bottom:-394px;left:338px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);'>
-            Temporal frequency
+            Temporal frequency; Lines: multiples of $1/\tau_e$
         </div>
         
         <div id='canvasoverlay' style="position:absolute; left:200px; z-index:4;">
@@ -631,38 +655,36 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
             \[
             \begin{aligned}
             \text{Firing-rates:} &&
-            \tau_e \dot{U_e} &= -U_e + f\left[
-            D   _e 
-            - \theta_e + g_e S(t) - \beta_e V_e\right]
+            \dot{U_e} &= \frac{1}{\tau_e}\big\{ -U_e + \color{cyan}{r_e} f\big[A_e - \theta_e + g_e S(t) - \beta_e V_e\big] \big\}
+            \color{cyan}{+ D_{U_e}\nabla^2U_e}
             \\&&
-            \tau_i \dot{U_i} &= -U_i + f\left[ 
-            D_i
-            - \theta_i + g_i S(t) - \beta_i V_i \right]
+            \dot{U_i} &= \frac{1}{\tau_i}\big\{ -U_i + \color{cyan}{r_i} f\left[A_i - \theta_i + g_i S(t) - \beta_i V_i \right] \big\}
+            \color{cyan}{+ D_{U_i}\nabla^2U_i}
             \\
-            \text{Synaptic drives:}&&
-            D_e &=
-            (w_{ee} K_l + a_{ee} K_e) \star U_e 
-            - (w_{ie} K_l + a_{ie}   K_i) \star U_i
+            \text{Synaptic activations:}&&
+            A_e &= (w_{ee} K_l + a_{ee} K_e) \star U_e - (w_{ie} K_l + a_{ie}   K_i) \star U_i
             \\&&
-            D_i &=
-            (w_{ei}K_l +a_{ei} K_e) \star U_e 
-            - (w_{ii}K_l + a_{ii} K_i) \star U_i 
+            A_i &= (w_{ei}K_l +a_{ei} K_e) \star U_e - (w_{ii}K_l + a_{ii} K_i) \star U_i 
             \\
             \text{Synaptic adaptation:}&&
-            \tau_{ve} \dot{V_e} &= U_e - V_e,\,\,
-            \tau_{ve} = 
+            \dot{V_e} &= \frac{1}{\tau_{ve}}(U_e - V_e) 
+            \color{cyan}{+ D_{V_e}\nabla^2V_e},\,\,
+            \text{ where }\tau_{ve} = 
             \begin{cases} 
                 \alpha_e & \text{if }V_e< U_e 
                 \\
                 \gamma_e & \text{if }V_e\ge U_e
             \end{cases} 
             \\&&
-            \alpha_i \dot{V_i} &= U_i - V_i 
+            \dot{V_i} &= \frac{1}{\alpha_i}(U_i - V_i) 
+            \color{cyan}{+ D_{V_i}\nabla^2V_i}
             \\
             \text{Interaction kernels:}&&
             K_{e,i,l}(x,y) 
-            &\propto \exp\big(\tfrac{1}{2} \tfrac{x^2}{\sigma_{e,i,l}^2}
-            +\tfrac{1}{2} \tfrac{y^2}{\sigma_{e,i,l}^2}\big)
+            &\propto \exp\big(\frac{1}{2} \tfrac{x^2}{\sigma_{e,i,l}^2}
+            +\tfrac{1}{2} \frac{y^2}{\sigma_{e,i,l}^2}\big)
+            \\&&
+            \color{cyan}{\text{Cyan: }}&\color{cyan}{\text{extended terms to support reaction-diffusion}}
             \end{aligned}
             \]
             </div>
@@ -731,21 +753,11 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
 //['Rule Stoffregen Ermentrou 2011 B',''].
 presets=[
 ['flicker: spots',
-'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2.5;Se=1;Sl=2;Aii=3;Aie=12;Aee=10;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=.7;f=8;stimsize=100;stimradius=0;tskip=20;dt=0.1;bradius=100;bhardness=1;'],
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2.5;Se=1;Sl=0;Aii=3;Aie=12;Aee=10;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=.7;f=8;stimsize=100;stimradius=0;tskip=20;dt=0.1;bradius=100;bhardness=1;'],
 ['flicker: stripes',
-'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=2;Aii=3;Aie=12;Aee=10.5;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0.6;f=18;stimsize=100;stimradius=0;tskip=2;dt=.5;bradius=100;bhardness=1;'],
-['flicker: squares',
-'waveform="square";Wii=0.4;Wie=0.7;Wee=0.7;Wei=0.3;Si=2.3;Se=1;Sl=0.1;Aii=3;Aie=12;Aee=10.5;Aei=8.5;Ti=19.7;Te=10;Hi=3.325;He=2.025;Gi=0;Ge=1;Ni=0;Ne=0.3;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0.8;f=4;stimsize=100;stimradius=0;tskip=30;dt=0.1;bradius=100;bhardness=1;'],
-['spot v2',
-'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=7;Se=7;Sl=0;Aii=0.5;Aie=8;Aee=7.275;Aei=2;Ti=7.5;Te=3;Hi=3.85;He=2.675;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.9;f=19;stimsize=0.3;stimradius=0.4;tskip=5;dt=0.2;bradius=0.45;bhardness=1;'],
-['spot v2b',
-'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=7;Se=7;Sl=0;Aii=0.5;Aie=8;Aee=7.275;Aei=2;Ti=7.5;Te=3;Hi=3.85;He=2.675;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=01;f=8;stimsize=0.4;stimradius=0.3;tskip=15;dt=0.2;bradius=0.5;bhardness=1;'],
-['spot v2 DC',
-'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=5;Se=5;Sl=0;Aii=0.5;Aie=8;Aee=7.275;Aei=2;Ti=7.5;Te=3;Hi=3.85;He=2.675;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.2;f=0;stimsize=0.3;stimradius=0.3;tskip=5;dt=0.2;bradius=0.45;bhardness=1;'],
-['spot v1',
-'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=8;Se=8;Sl=0;Aii=0.4;Aie=8;Aee=7.275;Aei=2;Ti=9;Te=3;Hi=3.85;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.7;f=15;stimsize=0.3;stimradius=0.4;tskip=10;dt=0.2;bradius=0.4;bhardness=1;'],
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=0;Aii=3;Aie=12;Aee=10.5;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0.6;f=18;stimsize=100;stimradius=0;tskip=2;dt=.5;bradius=100;bhardness=1;'],
 ['Fun ripples',
-'waveform="sine";Wii=0;Wie=5;Wee=8.2;Wei=4.49;Si=0.8;Se=5;Sl=0;Aii=0;Aie=0;Aee=1.1;Aei=0;Ti=2.1;Te=2.3;Hi=2.55;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=90;bi=0.9;ae=10;gammae=10;be=0.8;Amp=0;f=25;stimsize=0.1;stimradius=0.4;tskip=5;dt=0.3;bradius=1;bhardness=1;'],
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=5;Wee=8.2;Wei=4.49;Si=0.8;Se=5;Sl=0;Aii=0;Aie=0;Aee=1.1;Aei=0;Ti=2.1;Te=2.3;Hi=2.55;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0.2;ai=90;bi=0.9;ae=10;gammae=10;be=0.8;Amp=0;f=25;stimsize=0.1;stimradius=0.4;tskip=5;dt=0.3;bradius=1;bhardness=1;'],
 ['Forest_Fire_0',
 'Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=3;Aie=18;Ti=5.8;Hi=5.5;Gi=0;Si=0.4;Ni=0;ai=2.7;bi=7.6;Aee=11.1;Aei=5.3;Te=2;He=3.1;Ge=0;Se=0.5;Ne=0.1;ae=1000;gammae=2;be=0.5;dt=2;Amp=11;f=0;bradius=1;bhardness=1;'],
 ['Forest_Fire_I',
@@ -790,16 +802,16 @@ presets=[
 'Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5.5;Ti=25;Hi=2;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=8.5;Aei=5;Te=4;He=1.9;Ge=10;Se=0.8;Ne=0.7;ae=100;gammae=100;be=0;dt=1;Amp=0;f=6.8;bradius=1;bhardness=1;'],
 ['Quasicycles 2',
 'Sl=2.0;Wii=0.0;Wie=0.0;Wee=0.0;Wei=0.0;Aii=0;Aie=5.5;Ti=25;Hi=2;Gi=0;Si=1;Ni=0;ai=100;bi=0;Aee=8.5;Aei=5;Te=4;He=1.9;Ge=10;Se=8;Ne=0.4;ae=100;gammae=100;be=0;dt=2.9;Amp=0;f=6.8;bradius=1;bhardness=1;'],
-['Stripe waves', 'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=2;Aii=6;Aie=14.3;Aee=8.8;Aei=11.3;Ti=40.2;Te=3.1;Hi=7;He=2.8;Gi=0;Ge=1;Ni=0.1;Ne=0.7;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0;f=6.8;dt=.1;tskip=20;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
-['Does not propagate', 'waveform="sine";Wii=0;Wie=4.8;Wee=8.22;Wei=4.5;Si=0.8;Se=10;Sl=1.2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0.1;ae=1;gammae=1;be=0.1;Amp=1.2;f=7;dt=0.3;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.4;bhardness=1;'],
+['Stripe waves', 're=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=2;Aii=6;Aie=14.3;Aee=8.8;Aei=11.3;Ti=40.2;Te=3.1;Hi=7;He=2.8;Gi=0;Ge=1;Ni=0.1;Ne=0.7;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0;f=6.8;dt=.1;tskip=20;stimsize=0.3;stimradius=0.7;bradius=1;bhardness=1;'],
+['Does not propagate', 're=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=4.8;Wee=8.22;Wei=4.5;Si=0.8;Se=10;Sl=1.2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0.1;ae=1;gammae=1;be=0.1;Amp=1.2;f=7;dt=0.3;tskip=10;stimsize=0.3;stimradius=0.7;bradius=0.4;bhardness=1;'],
 ['Threshold',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=0.8;Se=5;Sl=1.2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=2;dt=0.3;tskip=10;stimsize=0.1;stimradius=0.9;bradius=0.4;bhardness=1;'],
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=0.8;Se=5;Sl=1.2;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1;f=2;dt=0.3;tskip=10;stimsize=0.1;stimradius=0.9;bradius=0.4;bhardness=1;'],
 ['Beautiful',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.49;Si=.8;Se=5;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=25;dt=0.3;tskip=5;stimsize=0.1;stimradius=0.4;bradius=0.4;bhardness=1;'],
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.49;Si=.8;Se=5;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.3;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=25;dt=0.3;tskip=5;stimsize=0.1;stimradius=0.4;bradius=0.4;bhardness=1;'],
 ['Fine tuned',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=1.7;Te=2.2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=25;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.8;bradius=0.8;bhardness=1;'],
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=1.7;Te=2.2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=5;f=25;dt=0.2;tskip=20;stimsize=0.2;stimradius=0.8;bradius=0.8;bhardness=1;'],
 ['Unusual',
-'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=4.8;Se=3;Sl=2;Aii=6;Aie=17.8;Aee=11.7;Aei=5.6;Ti=5.8;Te=2;Hi=7.6;He=3.6;Gi=0;Ge=1;Ni=0;Ne=0;ai=2.7;bi=0;ae=1000;gammae=2;be=0;Amp=1.5;f=4;dt=0.5;tskip=20;stimsize=0.8;stimradius=1;bradius=0.45;bhardness=1;'],
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=4.8;Se=3;Sl=2;Aii=6;Aie=17.8;Aee=11.7;Aei=5.6;Ti=5.8;Te=2;Hi=7.6;He=3.6;Gi=0;Ge=1;Ni=0;Ne=0;ai=2.7;bi=0;ae=1000;gammae=2;be=0;Amp=1.5;f=4;dt=0.5;tskip=20;stimsize=0.8;stimradius=1;bradius=0.45;bhardness=1;'],
 ['ghostglider',
 'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.2;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
 ['flameflicker',
@@ -817,37 +829,22 @@ presets=[
 ['stepwise',
 'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0;Se=2.7;Sl=1.5;Aii=3.9;Aie=20.6;Aee=11.8;Aei=5.2;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0.4;Ni=0;Ne=0.4;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=2;stimsize=0.1;stimradius=0;tskip=2;dt=0.5;bradius=1;bhardness=1;'],
 ['nebula',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=0.8;Se=5;Sl=1.2;Aii=0;Aie=0;Aee=0.9;Aei=0;Ti=2.1;Te=2.3;Hi=2.475;He=2.4;Gi=0;Ge=1;Ni=0.2;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1.1;f=1;stimsize=0.2;stimradius=0.6;tskip=16;dt=0.7;bradius=1;bhardness=1;'],
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=0.8;Se=5;Sl=1.2;Aii=0;Aie=0;Aee=0.9;Aei=0;Ti=2.1;Te=2.3;Hi=2.475;He=2.4;Gi=0;Ge=1;Ni=0.2;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=1.1;f=1;stimsize=0.2;stimradius=0.6;tskip=16;dt=0.7;bradius=1;bhardness=1;'],
 ['20230524',
-'waveform="sine";Wii=2.6;Wie=0;Wee=6.8;Wei=0;Si=0;Se=0;Sl=4;Aii=0;Aie=5.1;Aee=0;Aei=3.4;Ti=30;Te=10;Hi=2.275;He=2.125;Gi=0;Ge=2;Ni=0;Ne=0;ai=10;bi=0.2;ae=10;gammae=10;be=0.2;Amp=0.4;f=5;stimsize=0.2;stimradius=0.3;tskip=10;dt=0.5;bradius=0.4;bhardness=1;'],
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=2.6;Wie=0;Wee=6.8;Wei=0;Si=0;Se=0;Sl=4;Aii=0;Aie=5.1;Aee=0;Aei=3.4;Ti=30;Te=10;Hi=2.275;He=2.125;Gi=0;Ge=2;Ni=0;Ne=0;ai=10;bi=0.2;ae=10;gammae=10;be=0.2;Amp=0.4;f=5;stimsize=0.2;stimradius=0.3;tskip=10;dt=0.5;bradius=0.4;bhardness=1;'],
 ['20230525',
-'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=0.1;Se=4.7;Sl=0;Aii=0.2;Aie=4;Aee=7.8;Aei=4.3;Ti=20;Te=10;Hi=1.575;He=1.55;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=1;f=12;stimsize=0.3;stimradius=0.4;tskip=10;dt=1;bradius=0.4;bhardness=1;'],
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=0.1;Se=4.7;Sl=0;Aii=0.2;Aie=4;Aee=7.8;Aei=4.3;Ti=20;Te=10;Hi=1.575;He=1.55;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=1;f=12;stimsize=0.3;stimradius=0.4;tskip=10;dt=1;bradius=0.4;bhardness=1;'],
 ['solved it!',
-'waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=8;Se=8;Sl=0;Aii=0.4;Aie=8;Aee=7.275;Aei=2;Ti=9;Te=3;Hi=3.85;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.7;f=15;stimsize=0.3;stimradius=0.4;tskip=10;dt=.2;bradius=0.4;bhardness=1;'],
-['Resonant positive dispersion 1',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.2;f=25;stimsize=0.2;stimradius=0.4;tskip=20;dt=0.1;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 2',
-'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=2;Se=5;Sl=1;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.2;f=25;stimsize=0.2;stimradius=0.4;tskip=20;dt=0.1;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 3',
-'waveform="square";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=1;Se=3;Sl=1;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.2;Te=2.2;Hi=2.45;He=2.4;Gi=0;Ge=0.3;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0;f=19;stimsize=10;stimradius=0.4;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 4',
-'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=0.9;Se=4.4;Sl=1.1;Aii=0.1;Aie=0;Aee=0.6;Aei=0.1;Ti=2.2;Te=2.2;Hi=2.45;He=2.35;Gi=0;Ge=0.4;Ni=0;Ne=2.5;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=28;stimsize=50;stimradius=0;tskip=20;dt=0.05;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 5',
-'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=0.9;Se=4.4;Sl=0.5;Aii=0.1;Aie=0;Aee=0.6;Aei=0.1;Ti=2.2;Te=2.2;Hi=2.45;He=2.35;Gi=0;Ge=0.4;Ni=0;Ne=2.5;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=28;stimsize=50;stimradius=0;tskip=5;dt=0.05;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 6',
-'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=0;Se=0.5;Sl=0;Aii=0.1;Aie=0;Aee=0.6;Aei=0.1;Ti=6;Te=6;Hi=2.45;He=2.35;Gi=0;Ge=0.4;Ni=0;Ne=0.2;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.3;f=8;stimsize=33;stimradius=0;tskip=24;dt=0.15;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 7',
-'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=0.5;Se=2;Sl=0.5;Aii=0.1;Aie=0;Aee=0.6;Aei=0.1;Ti=6;Te=6;Hi=2.45;He=2.35;Gi=0;Ge=0.4;Ni=0;Ne=0.2;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.3;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.2;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 8',
-'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.4;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=6;Te=6;Hi=2.45;He=2.35;Gi=0;Ge=0.4;Ni=0;Ne=0.2;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.3;f=12;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 9',
-'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.4;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=5.9;Te=6;Hi=2.45;He=2.375;Gi=0;Ge=0.4;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 10',
-'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.1;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=5.9;Te=6;Hi=2.45;He=2.375;Gi=0;Ge=0.4;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 11',
-'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.1;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=5.9;Te=6;Hi=2.45;He=2.375;Gi=0;Ge=0.4;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=8;Se=8;Sl=0;Aii=0.4;Aie=8;Aee=7.275;Aei=2;Ti=9;Te=3;Hi=3.85;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.7;f=15;stimsize=0.3;stimradius=0.4;tskip=10;dt=.2;bradius=0.4;bhardness=1;'],
+['model v2',
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=7;Se=7;Sl=0;Aii=0.5;Aie=8;Aee=7.275;Aei=2;Ti=7.5;Te=3;Hi=3.85;He=2.675;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.9;f=19;stimsize=0.3;stimradius=0.4;tskip=5;dt=0.2;bradius=0.45;bhardness=1;'],
+['model v2b',
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=7;Se=7;Sl=0;Aii=0.5;Aie=8;Aee=7.275;Aei=2;Ti=7.5;Te=3;Hi=3.85;He=2.675;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=01;f=8;stimsize=0.4;stimradius=0.3;tskip=15;dt=0.2;bradius=0.5;bhardness=1;'],
+['model v2 DC',
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=5;Se=5;Sl=0;Aii=0.5;Aie=8;Aee=7.275;Aei=2;Ti=7.5;Te=3;Hi=3.85;He=2.675;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.2;f=0;stimsize=0.3;stimradius=0.3;tskip=5;dt=0.2;bradius=0.45;bhardness=1;'],
+['model v1',
+'re=1;ri=1;due=0;dui=0;dve=0;dvi=0;waveform="sine";Wii=0;Wie=0;Wee=0;Wei=0;Si=8;Se=8;Sl=0;Aii=0.4;Aie=8;Aee=7.275;Aei=2;Ti=9;Te=3;Hi=3.85;He=2.65;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=10;gammae=10;be=0;Amp=0.7;f=15;stimsize=0.3;stimradius=0.4;tskip=10;dt=0.2;bradius=0.4;bhardness=1;'],
 ]
-
 
 function main() {
     console.log('Initializing...');
@@ -957,14 +954,20 @@ function main() {
     var Se  = 3.0;         // Excitatory population spread
     var Si  = 5.0;         // Inhibitory population spread
     var Sl  = 1.0;         // Local population spread
-    var Aee = 4;           // E-E coupling Aeight
-    var Aie = 4;           // Excitation of Inhibitory coupling Aeight
-    var Aei = 4;           // Inhibition of Excitatory coupling Aeight
-    var Aii = 0;           // I-I coupling Aeight
-    var Wee = 0;           // E-E coupling Aeight
-    var Wie = 0;           // Excitation of Inhibitory coupling Aeight
-    var Wei = 0;           // Inhibition of Excitatory coupling Aeight
-    var Wii = 0;           // I-I coupling Aeight
+    var due = 0.0;         // Excitatory rate direct diffusion
+    var dui = 0.0;         // Inhibitory rate direct diffusion
+    var dve = 0.0;         // Excitatory adaptation direct diffusion
+    var dvi = 0.0;         // Inhibitory adaptation direct diffusion
+    var re  = 1.0;         // Excitatory maximum rate or nonlinear interaction strength
+    var ri  = 1.0;         // Inhibitory maximum rate or nonlinear interaction strength
+    var Aee = 4;           // E-E coupling Weight
+    var Aie = 4;           // Excitation of Inhibitory coupling Weight
+    var Aei = 4;           // Inhibition of Excitatory coupling Weight
+    var Aii = 0;           // I-I coupling Weight
+    var Wee = 0;           // E-E coupling Weight
+    var Wie = 0;           // Excitation of Inhibitory coupling Weight
+    var Wei = 0;           // Inhibition of Excitatory coupling Weight
+    var Wii = 0;           // I-I coupling Weight
     var He  = 2;           // Bias in E cell synaptic input (threshold)
     var Hi  = 2;           // Bias in I cell synaptic input (threshold)
     var Ne  = 0;           // Noise level (uniform) in E cells
@@ -997,7 +1000,7 @@ function main() {
     }
     waveformtoggle.onclick = foo;
     
-    // Simulus
+    // Stimulus
     const heav = (z)=>(z<.0?.0:z==.0?.5:1.);
     const Stim = (t)=> ((waveform=="square")? heav(Math.sin(2*Math.PI*t*f/1000.)-Str) : (Math.sin(2*Math.PI*t*f/1000.) )+1)*0.5*Amp;
     const F  = (x)=>1/(1+Math.exp(-x));
@@ -1101,7 +1104,9 @@ function main() {
     var hblur  = GPUGaussianBlur(gl,5.0);
     var copy   = GPUcopy(gl,N,N);
     var blur   = GPUGaussianMultiBlur16(gl,0.5);  // nonlocal blur
-    var local_blur  = GPUGaussianMultiBlur16(gl,2,2);  // local blur
+    var blur2  = GPUGaussianMultiBlur16(gl,2,2);  // local blur
+    var blurU  = GPUGaussianMultiBlur16(gl,2,2);  // rate diffusion
+    var blurV  = GPUGaussianMultiBlur16(gl,2,2);  // adaptation diffusion
     var mblur  = GPUGaussianMultiBlur(gl,1,1,1,1); // blur for masks
     var gpurng = GPUNoise(gl); // noise kernel
     var rand   = WeakRNG();
@@ -1133,7 +1138,9 @@ function main() {
         follow();
         
         blur  = GPUGaussianMultiBlur16(gl,Se,Si);
-        local_blur = GPUGaussianMultiBlur16(gl,Sl,Sl);
+        blur2 = GPUGaussianMultiBlur16(gl,Sl,Sl);
+        blurU = GPUGaussianMultiBlur16(gl,due*dt,dui*dt);
+        blurV = GPUGaussianMultiBlur16(gl,dve*dt,dvi*dt);
         mblur = GPUGaussianMultiBlur(gl,0,Se,Si,Sl); // blur for masks
         
         // Recompute masks: TODO: do this only if changed
@@ -1148,6 +1155,8 @@ function main() {
             dt : dt,  // Euler integrator time step
             Te : Te,  // Excitatory population time constant (ms)
             Ti : Ti,  // Inhibitory population time constant (ms)
+            re : re,  // Excitatory maximum firing rate
+            ri : ri,  // Inhibitory maximum firing rate
             Aee: Aee, // E-E coupling
             Aie: Aie, // Excitation of Inhibitory coupling
             Aei: Aei, // Inhibition of Excitatory coupling
@@ -1323,12 +1332,12 @@ function main() {
                 if (Ne>0||Ni>0) {
                     gpurng(noise,temp1);
                 }
-                blur(U,temp1,UC);
-                if (Sl>0) {
-                    local_blur(U,temp1,UC2);
-                } else {
-                    copy(U,UC2);
-                }
+                blur (U,temp1,UC );
+                blur2(U,temp1,UC2);
+                
+                blurU(U,temp1);
+                blurV(V,temp1);
+                
                 wc_kernel({
                     Uin   :U,
                     Vin   :V,
