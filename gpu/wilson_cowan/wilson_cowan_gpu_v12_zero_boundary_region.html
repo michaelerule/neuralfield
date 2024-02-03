@@ -316,10 +316,10 @@ vec4 eigvals(vec2 u) {
     // The first two return fields handle real eigenvalues (possibly two distinct ones)
     // The second two return fields handle the imaginary parts of complex-conjugate paired eigenvalues
     return vec4(
-        F(1.*(r1*Te)) - u.y, 
-        F(1.*(r2*Te)) - u.y, 
-        F(8.*( imdelta*Te)) - u.y, 
-        F(8.*(-imdelta*Te)) - u.y
+        F(6.*(r1*Te)) - u.y, 
+        F(6.*(r2*Te)) - u.y, 
+        F(6.*( imdelta*Te)) - u.y, 
+        F(6.*(-imdelta*Te)) - u.y
     );
 }
 float yticks(float y) {
@@ -613,7 +613,7 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
         </div>
         <!-- x-axis label for plot on bottom right -->
         <div id="ax2xlabel" class="axislabel" style='bottom:-512px;left:456px;width:256px;'>
-            Angular spatial frequency
+            Spatial frequency
         </div>
         <!-- y-axis label for plot on bottom right -->
         <div id="ax2ylabel" class="axislabel" style='bottom:-394px;left:338px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);'>
