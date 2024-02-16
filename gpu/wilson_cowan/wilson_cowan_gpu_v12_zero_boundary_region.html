@@ -302,14 +302,12 @@ vec4 eigvals(vec2 u) {
     float d = ( -(Wii*R2 + Aii * Ri) * dUi - bi * dUi - 1.0)/Ti;
     float r = 0.5*(a+d);
     float D = (a+d)*(a+d)*0.25 - (a*d-b*c);
-    
     // Real part determins stability
     float realdelta = sqrt(max(D,0.0));
     float r1 = r+realdelta*.866;
     float r2 = r-realdelta*.5;
     // D determines frequency when negative
     float imdelta = sqrt(max(-D,0.0));
-    
     // In order to plot lines using a pixel shader
     // We return potential surfaces that cross zero
     // At the locations where the lines should go. 
@@ -421,17 +419,37 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
         <div style="clear:both;display:block">
             <div class="controls">
                 <div class="controltext">
-                    Inhibitory
+                    <b>Inhibitory</b>
                 </div>
             </div>
             <div class="controls">
                 <div class="controltext">
-                    Excitatory
+                    <b>Excitatory</b>
                 </div>
             </div>
         </div>
+        <div class="controltext">Lateral E–I coupling strengths ($\sigma_{e,i}$)</div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$a_{ii}$<input type="number" step="0.1" max="100" min="0" name="Aii" value="3.0"/></div>
+                <div class="control">$a_{ie}$<input type="number" step="0.1" max="100" min="0" name="Aie" value="12.0"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$a_{ee}$<input type="number" step="0.1" max="100" min="0" name="Aee" value="10.0"/></div>
+                <div class="control">$a_{ei}$<input type="number" step="0.1" max="100" min="0" name="Aei" value="8.5"/></div>
+            </div>
+        </div>
+        <div class="controltext">Lateral spatial spread</div>
+        <div style="clear:both;display:block">
+            <div class="controls">
+                <div class="control">$\sigma_i$<input type="number" step="0.1" max="100" min="0" name="Si" value="1.5"/></div>
+            </div>
+            <div class="controls">
+                <div class="control">$\sigma_e$<input type="number" step="0.1" max="100" min="0" name="Se" value="0.6"/></div>
+            </div>
+        </div>
         <div class="controltext">
-            Local coupling strengths ($\sigma_l$)
+            Local E–I coupling strengths ($\sigma_l$)
         </div>
         <div style="clear:both;display:block">
             <div class="controls">
@@ -443,31 +461,10 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
                 <div class="control">$w_{ei}$<input type="number" step="0.1" max="100" min="0" name="Wei" value="0.0"/></div>
             </div>
         </div>
-        <div class="controltext">
-            Spatial spread
-        </div>
+        <div class="controltext">Local spatial scale (pixels)</div>
         <div style="clear:both;display:block">
-            <div class="controls">
-                <div class="control">$\sigma_i$<input type="number" step="0.1" max="100" min="0" name="Si" value="1.5"/></div>
-            </div>
-            <div class="controls">
-                <div class="control">$\sigma_e$<input type="number" step="0.1" max="100" min="0" name="Se" value="0.6"/></div>
-            </div>
             <div class="controls">
                 <div class="control">$\sigma_l$<input type="number" step="0.1" max="100" min="0" name="Sl" value="2.0"/></div>
-            </div>
-        </div>
-        <div class="controltext">
-            Lateral coupling strengths ($\sigma_{e,i}$)
-        </div>
-        <div style="clear:both;display:block">
-            <div class="controls">
-                <div class="control">$a_{ii}$<input type="number" step="0.1" max="100" min="0" name="Aii" value="3.0"/></div>
-                <div class="control">$a_{ie}$<input type="number" step="0.1" max="100" min="0" name="Aie" value="12.0"/></div>
-            </div>
-            <div class="controls">
-                <div class="control">$a_{ee}$<input type="number" step="0.1" max="100" min="0" name="Aee" value="10.0"/></div>
-                <div class="control">$a_{ei}$<input type="number" step="0.1" max="100" min="0" name="Aei" value="8.5"/></div>
             </div>
         </div>
         <div class="controltext">
