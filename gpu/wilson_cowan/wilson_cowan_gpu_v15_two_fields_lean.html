@@ -942,7 +942,7 @@ function main() {
     // GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_MIRRORED_REPEAT,
     // GL_REPEAT, or GL_MIRROR_CLAMP_TO_EDGE
     //var clip_mode = gl.GL_MIRROR_CLAMP_TO_EDGE;
-    var clip_mode = gl.GL_CLAMP_TO_EDGE;
+    var clip_mode = gl.GL_REPEAT;
     var temp1  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
     var temp2  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
     var temp3  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
