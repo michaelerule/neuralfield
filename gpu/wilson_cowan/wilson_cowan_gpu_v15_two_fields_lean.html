@@ -359,8 +359,8 @@ void main() {
     if (XY.y>1.) {
         // Top half of screen: draw neural fields as colors
         vec4 c = XY.x<1.
-            ? vec4(El,Ed,0.0,1.0)
-            : vec4(Il,Id,0.0,1.0);
+            ? vec4(El/(El+Ed),Ed/(El+Ed),0.0,1.0)
+            : vec4((El+Ed)*0.5,(Il+Id)*0.5,3.0*abs((El+Ed)*0.5-(Il+Id)*0.5),1.0);
         gl_FragColor = c;
     } 
     // Bottom half of screen: Histograms, nullclines, eigenvalue plots
@@ -563,11 +563,11 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
         
         <!-- title for plot on top left -->
         <div id="axAtitle" class="title"style='bottom:-20px;left:200px;width:256px;'>
-            Red/Green E cells
+            Red/Green E cell Dominance
         </div>
         <!-- title for plot on top right -->
         <div id="axBtitle" class="title"style='bottom:-20px;left:456px;width:256px;'>
-            Red/Green I cells
+            Overall local E-I tone
         </div>
         <!-- title for plot on bottom left -->
         <div id="ax1title" class="axislabel"style='bottom:-276px;left:200px;width:256px;'>
