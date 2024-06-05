@@ -55,16 +55,6 @@ A {
     margin: auto auto;
     margin-top: 25px;
 }
-.controlbox {
-    width:200px;
-    height:712px;
-    float:left;
-    z-index:100;
-}
-.controls {
-    width:100px;
-    float:right;
-}
 .axislabel {
     position:absolute;
     z-index:1;
@@ -91,17 +81,6 @@ A {
     font-size:85%;
     height:20px;
     line-height:20px;
-}
-.control {
-    text-align:right;
-    width:100%;
-    font-size: 95%;
-}
-.controltext {
-    font-size: 95%;
-    clear:both;
-    display:block;
-    padding-top:5px;
 }
 .checkbutton {
     margin: 1px 4px;
@@ -219,8 +198,52 @@ input[type=number] {
     left:0px;
     z-index:1000;
 }
+.controlbox {
+    width:200px;
+    height:712px;
+    float:left;
+    z-index:100;
+}
+.controls {
+    width:100px;
+    float:right;
+}
+.control {
+    text-align:right;
+    width:100%;
+    font-size: 95%;
+}
+.controltext {
+    font-size: 95%;
+    clear:both;
+    display:block;
+    padding-top:5px;
+}
+
+/* clone of new abbreviated synatx for control panel */
+.ctlbox {
+    width:200px;
+    height:712px;
+    float:left;
+    z-index:100;
+}
+.ctls {
+    width:100px;
+    float:right;
+}
+.ctl {
+    text-align:right;
+    width:100%;
+    font-size: 95%;
+}
+.cttext {
+    font-size: 95%;
+    clear:both;
+    display:block;
+    padding-top:5px;
+}
 /* make unselectable things that ought not be selected */
-.button, .control, .controls, .controlbox, .controltext, .button_container,
+.button, .control, .controls, .controlbox, .controltext, .ctl, .ctls, .ctlbox, .ctltext, .button_container,
 #equation, #maincanvas, #canvasoverlay, .clickblocker, .overlay, #phaseoverlay,
 .squarebutton .info {
     -webkit-touch-callout: none;
@@ -247,3 +270,30 @@ input[type=number] {
     display: table-cell;
     vertical-align: middle;
 }
+
+
+
+/* 
+Plot axis labels
+[TAG][#ID][.CLASS] CSS selector 
+*/
+div#axAtitle.title{bottom:-20px;left:200px;width:256px;}
+div#axBtitle.title{bottom:-20px;left:456px;width:256px;}
+div#ax1title.axislabel{bottom:-276px;left:200px;width:256px;}
+div#ax1title.axislabel{bottom:-276px;left:200px;width:256px;}
+div#ax1xlabel.axislabel{bottom:-512px;left:200px;width:256px;}
+div#ax1ylabel.axislabel{bottom:-394px;left:82px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);}
+/* 512-1.1/(1.2/256) */
+div#ax1ytick0.axislabel{bottom:-496px;left:82px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);}
+/* 200+.1/(1.2/256) = 221.33333333333334 */
+div#ax1xtick0.axislabel{bottom:-512px;left:221px;}
+/* 200+1.1/(1.2/256) = 434.6666666666667 */
+div#ax1xtick1.axislabel{bottom:-512px;left:434.7px;}
+div#ax2xlabel.axislabel{bottom:-512px;left:456px;width:256px;}
+div#ax2ylabel.axislabel{bottom:-394px;left:338px;width:256px;-webkit-transform:rotate(-90deg);-moz-transform:rotate(-90deg);}
+
+
+
+
+
+
