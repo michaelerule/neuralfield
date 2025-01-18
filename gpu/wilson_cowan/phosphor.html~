@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html>
+<!-- Flicker javascript demo (c) Michael Rule 2015 -->
+<head>
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+<meta content="utf-8" http-equiv="encoding">
+<script src="../lib/colormaps.js"></script>
+<script src="../lib/gpgpu.js"></script>
+<script src="../lib/gpugaussian.js"></script>
+<script src="../lib/gpurand.js"></script>
+<script src="../lib/parameters.js"></script>
+<link rel="stylesheet" type="text/css" href="wc.css">
+<link rel="stylesheet" type="text/css" href="wcv2.css">
+<title>Wilson-Cowan on the GPU and in your browser</title>
+
+<!-- import the MathJax scripts -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript"
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+
+<script id="wc_kernel-parameters" type="x-fragment-parameters">
+// MAIN WILSON COWAN KERNEL
+// Note: this is not Javascript and these values are not
+// directly accessible to either the main function or the wilson-
+// cowan kernel below. These are type declarations, to be 
+// parsed by the parameters.js library, to help bridge the 
+// weakly-typed javascript with the strong typing of WebGLSL.
+sampler2D Uin;
+sampler2D Vin;
+sampler2D Uconv;
+sampler2D Uconv2;
+sampler2D noise;
+sampler2D masks;
+float dt;  // Euler integrator time step
+float Te;  // Excitatory population time constant (ms)
+float Ti;  // Inhibitory population time constant (ms)
+float Aee; // E-E coupling
+float Aie; // Excitation of Inhibitory coupling
+float Aei; // Inhibition of Excitatory coupling
+float Aii; // I-I coupling (local)
+float Wee; // E-E coupling (local)
+float Wie; // Excitation of Inhibitory coupling (local)
+float Wei; // Inhibition of Excitatory coupling (local)
+float Wii; // I-I coupling (local)
+float He;  // Bias in E cell synaptic input
+float Hi;  // Bias in I cell synaptic input
+float bi;  // Strength of Inhibitory adaptation
+float be;  // Strength of Excitatory adaptation
+float Ne;  // Noise level (uniform) in E cells
+float Ni;  // Noise level (uniform) in I cells
+float Gi;  // Gain on stimulation of i cells
+float Ge;  // Gain on stimulation of e cells
+float s;   // External stimulation
+float stimsize;   // Size of stimulation spot
+float stimradius; // Radial displacement of simulation spot
+</script>
+<script id="wc_kernel" type="x-fragment">
+#define twopi 6.283185307179586
+#define F(x) (clamp((1./(1.+exp(-(x)))),0.,1.))
+vec2 EncodeFloatXY( float v ) {
+  // Fixed point float encoding ranges in (0,1)
+  v       -= 0.00000762951; //predictable rounding
+  v        = clamp(v,0.0,1.0);
+  vec2 enc = vec2(1.0, 255.0) * v;
+  enc      = fract(enc);
+  enc     -= enc.yy * vec2(1./255.,0.);
+  return clamp(enc,0.,1.);
+}
+float DecodeFloatXY( vec2 xy ) {
+  return dot( xy, vec2(1.,1./255.) );
+}
+void main() {
+    vec2 XY = gl_FragCoord.xy/vec2(W,H);
+    vec4 U  = texture2D(Uin  , XY); // raw fields
+    vec4 V  = texture2D(Vin  , XY); // adaptation fields
+    vec4 Uc = texture2D(Uconv, XY); // convolved fields
+    vec4 Ul = texture2D(Uconv2,XY); // convolved fields
+    // Sample noise
+    vec2 N = vec2(0.0);
+    if (Ne>0. || Ni>0.) {
+        vec4 n  = texture2D(noise, XY)*0.999+0.0001; // uniform noise
+        vec2 R  = sqrt(-2.*log(n.xy));  // Transform uniform noise
+        vec2 T  = twopi*n.zw;           // into Gaussian using Box-
+        N = vec2(R*cos(T))*sqrt(dt); // Muller transform.
+    }   
+    // This isn't quite correct but is ... close enough
+    N = N*sqrt(dt);
+    // Unpack state from texture information
+    // using two channels per float (16 bit fixed point)
+    float Ce = DecodeFloatXY(Uc.xy); // nonlocal convolution
+    float Ci = DecodeFloatXY(Uc.zw);
+    float Le = DecodeFloatXY(Ul.xy); // local convolution
+    float Li = DecodeFloatXY(Ul.zw);
+    float Ue = DecodeFloatXY(U.xy); // Firing-rate variables
+    float Ui = DecodeFloatXY(U.zw);
+    float Ve = DecodeFloatXY(V.xy); // adaptation variables
+    float Vi = DecodeFloatXY(V.zw);
+    // Note: blurred masks standard deviations are xyzw = 0,Se,Si,Sl
+    // Use these to correctly normalize convolutions near boundaries
+    vec4 m = texture2D(masks,XY);
+    // Normalize convoltion near boundary
+    // Note 20230523: I've removed this to pull boundary to zero
+    //Ce = Ce/m.y;
+    //Ci = Ci/m.z;
+    //Le = Le/m.w;
+    //Li = Li/m.w;
+    // Stimulus
+    float  d = length(XY-vec2(0.5,0.5)+vec2(0.0,0.5)*stimradius);
+    float s2 = s*exp(-(d*d)*stimsize);
+    // Firing rates
+    float Ae  = F(Wee*Le-Wei*Li+Aee*Ce-Aei*Ci-He+Ge*s2-Ve*be+Ne*N.x);
+    float Ai  = F(Wie*Le-Wii*Li+Aie*Ce-Aii*Ci-Hi+Gi*s2-Vi*bi+Ni*N.y);
+    // Forward Euler
+    //float Ue_out = Ue + (Ae - Ue)*(dt/Te);
+    //float Ui_out = Ui + (Ai - Ui)*(dt/Ti);
+    // Coordinatewise exponential Euler
+    float alphae = exp(-dt/Te);
+    float alphai = exp(-dt/Ti);
+    float Ue_out = alphae*(Ue - Ae) + Ae;
+    float Ui_out = alphai*(Ui - Ai) + Ai;
+    // Save
+    gl_FragColor = vec4(
+        EncodeFloatXY(Ue_out),
+        EncodeFloatXY(Ui_out))*m.x;
+}
+</script>
+
+<script id="generate_masks_kernel-parameters" type="x-fragment-parameters">
+// REGION MASK KERNEL
+float bradius;   // boundary mask radius
+float bhardness; // boundary hardness 
+</script>
+<script id="generate_masks_kernel" type="x-fragment">
+void main() {
+    vec2 XY  = gl_FragCoord.xy/vec2(W,H); // Get location in [0,1]² coordinates
+    XY = XY - vec2(.5,.5); // Center
+    XY = vec2(XY.x+XY.y,XY.x-XY.y);//*0.7071067811865476;
+    XY = pow(abs(XY),vec2(2,2)); // Power: 1 for square, 2 for circle
+    
+    float d;
+    d = XY.x+XY.y; // Get distance from center
+    d = pow(d,.5);
+    
+    float rr = 1./(1.+exp((d-bradius)*bhardness)); // 
+    gl_FragColor = vec4(rr,rr,rr,rr);
+}
+</script>
+
+<script id="adapt_kernel-parameters" type="x-fragment-parameters">
+// ADAPTATION KERNEL
+sampler2D Uin;
+sampler2D Vin;
+float dt;  // Euler integrator time step
+float ai;  // Timescale of inhibitory adaptation
+float ae;  // Timescale of excitatory adaptation
+float gammae;
+</script>
+<script id="adapt_kernel" type="x-fragment">
+#define twopi 6.283185307179586
+#define F(x) (1./(1.+exp(-(x))))
+vec2 EncodeFloatXY( float v ) {
+  v -= 0.00000762951;
+  v = clamp(v,0.,1.);
+  vec2 enc = vec2(1.0, 255.0) * v;
+  enc = fract(enc);
+  enc.x -= enc.y/255.0;
+  return clamp(enc,0.,1.);
+}
+float DecodeFloatXY( vec2 xy ) {
+  return dot( xy, vec2(1.,1./255.) );
+}
+void main() {
+    vec2 XY     = gl_FragCoord.xy/vec2(W,H);
+    vec4 U      = texture2D(Uin , XY); // raw fields
+    vec4 V      = texture2D(Vin , XY); // adaptation fields
+    float Ue_in = DecodeFloatXY(U.xy);
+    float Ui_in = DecodeFloatXY(U.zw);
+    float Ve_in = DecodeFloatXY(V.xy);
+    float Vi_in = DecodeFloatXY(V.zw);
+    
+    // Forward Euler
+    //float te  = Ue_in > Ve_in? gammae : ae;
+    //float Ve  = Ve_in + (Ue_in - Ve_in)*(dt/te);
+    //float Vi  = Vi_in + (Ui_in - Vi_in)*(dt/ai);
+    
+    // Coordinatewise exponential Euler
+    float te  = Ue_in > Ve_in? gammae : ae;
+    float alphae = exp(-dt/te);
+    float alphai = exp(-dt/ai);
+    float Ve = alphae*(Ve_in - Ue_in) + Ue_in;
+    float Vi = alphai*(Vi_in - Ui_in) + Ui_in;
+
+    gl_FragColor = vec4(
+        EncodeFloatXY(Ve),
+        EncodeFloatXY(Vi));
+}
+</script>
+
+<script id="histogram" type="x-shader/x-fragment">
+uniform sampler2D Uin;
+float DecodeFloatXY( vec2 xy ) {
+    return dot( xy, vec2(1.,1./255.) );
+}
+void main() {
+    vec2  zm = gl_FragCoord.xy/vec2(W,H);
+    vec4  U  = texture2D(Uin  ,zm);
+    vec4  d  = vec4(1.0);
+    for (int y=0; y<H; y+=(H/16)) {
+        for (int x=0; x<W; x+=(W/16)) { 
+            // Sample location on screen
+            vec2 z  = clamp(vec2(float(x),float(y))/vec2(W,H)+zm,0.2,1.-0.2);
+            U       = texture2D(Uin  ,z);
+            // Distance between pixel state and histogram bin center
+            float e = zm.x-DecodeFloatXY(U.xy);
+            float i = zm.y-DecodeFloatXY(U.zw);
+            float dd = e*e+i*i;
+            // If state is close to (within) this bin, increment
+            if (dd<0.0005) {
+                d *= 0.999;//75;
+            }
+        }
+    }
+    gl_FragColor = pow(1.0-pow(d,vec4(10.)),vec4(0.2));
+}
+</script>
+
+<script id="colormap-parameters" type="x-fragment-parameters">
+// COLOR MAP KERNEL, ALSO RENDERS THE PHASE PLANES
+// NOW REDUCED FOR DEMO ONLY MODE ONLY SHOWS ADAPTATION
+sampler2D Uin;
+sampler2D Vin;
+sampler2D hist;
+float Aee; // E-E coupling
+float Aie; // Excitation of Inhibitory coupling
+float Aei; // Inhibition of Excitatory coupling
+float Aii; // I-I coupling
+float Wee; // E-E coupling (local)
+float Wie; // Excitation of Inhibitory coupling (local)
+float Wei; // Inhibition of Excitatory coupling (local)
+float Wii; // I-I coupling (local)
+float Se;  // Excitatory standard deviation
+float Si;  // Inihibotry standard deviation
+float Sl;  // Local standard deviation
+float Te;  // Time constant E
+float Ti;  // Time constant I
+float He;  // Bias in E cell synaptic input
+float Hi;  // Bias in I cell synaptic input
+float bi;  // Strength of Inhibitory adaptation
+float be;  // Strength of Excitatory adaptation
+float Ue0; // Fixed point E
+float Ui0; // Fixed point I
+float dpi; // screen DPI needed to capture hairlines correctlyP
+</script>
+<script id="colormap" type="x-shader/x-fragment">
+float DecodeFloatXY( vec2 xy ) {
+  return dot( xy, vec2(1.,1./255.) );
+}
+void main() {
+    vec2  XY = gl_FragCoord.xy/vec2(W*2,H*2);
+    vec4  U  = texture2D(Uin  ,XY);
+    vec4  V  = texture2D(Vin  ,XY);
+    float Ue = DecodeFloatXY(U.xy);
+    float Ui = DecodeFloatXY(U.zw);
+    float Ve = DecodeFloatXY(V.xy);
+    float Vi = DecodeFloatXY(V.zw);
+    float r = length(XY-vec2(0.5,0.5))*2.0;
+    /// 1/[1+exp(-g*log(1-r))] = 1/(1+1/(1-r)^g] = (1-r)^g/[(1-r)^g+1]
+    float q  = pow(1.0-r,10.0);
+    float h  = -5.0;
+    float g  = 10.0;
+    float x  = log(min(0.0004,1.0-r));
+    float rr = clamp(10.0*(0.9-r),0.0,1.0);
+    rr = rr>0.5? 1.0-2.0*pow(rr-1.0,2.0) : 2.0*pow(rr,2.0);
+    vec4 c0 = vec4(0.2/0.1803921568627451,0.2/0.19607843137254902,0.2/0.043137254901960784,1.0);
+    vec4 c1 = vec4(Vi,Ve,abs(Ve-Vi)*3.0,1.0)*c0;
+    vec4 c2 = vec4(0.2,0.2,0.2,1.0);
+    gl_FragColor = rr*c1 + (1.0-rr)*c2;
+}
+</script>
+</head>
+
+<body onload="javascript:waitForMathJax()">
+<div class="overlay" style="margin:auto auto; height:100%; width:100%; font-size:80%;" id="hidingframe">
+<div class="outer">
+<div class="middle">
+<center>
+Please wait while the simulation loads<br/>
+This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br/>
+<img src="loader.gif"/>
+</center>
+</div>
+</div>
+</div>
+
+<div class="clickblocker" style="margin:auto auto; height:100%; width:100%;" id="clickblock"> </div>
+
+<div class="outer" id="mainframe">
+<div class="middle">
+<div id='canvasdiv'>
+
+    <div class="controlbox" style="font-size:80%;position:relative;">
+    </div>
+
+    <div style="position:relative;">
+        <canvas id='maincanvas' style="position:absolute; left:200px; z-index: 1;"> 
+            This application relies on the HTML5 Canvas element and Javascript. 
+            If you have Javascript disabled, try re-enabling it for this page. 
+        </canvas>
+        
+        <div id='canvasoverlay' style="position:absolute; left:200px; z-index:4;">
+            <div style="display: table-cell; vertical-align: middle;">
+            Click to start
+            </div>
+        </div>
+
+
+    </div>
+
+    <!-- just here for padding -->
+    <div id="infotext" class="infotext">
+        <div class="button_container">
+            <input class="button" type="button" value="Start"/>
+            <input class="button" type="button" value="Step"/>
+            <input class="button" type="button" value="Randomize"/>
+        </div>
+            
+        
+        
+    </div>
+    
+</div>
+</div>
+</div>
+
+<script type="text/javascript">
+presets=[
+['Resonant positive dispersion 2',
+'waveform="sine";Aii=0;Aie=0;Aee=1;Aei=0;Si=2;Se=5;Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Sl=1;Ti=2.1;Te=2.2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=10;bi=0;ae=1;gammae=1;be=0;Amp=0.1;f=25;stimsize=0.4;stimradius=0.45;tskip=20;dt=0.1;bradius=1;bhardness=1;'],
+]
+
+
+function main() {
+    console.log('Initializing...');
+
+    var hidingframe   = document.getElementById('hidingframe');
+    var canvasoverlay = document.getElementById('canvasoverlay');
+    var clickblock    = document.getElementById('clickblock');
+    var frame         = document.getElementById('canvasdiv');
+    var canvas        = document.getElementById('maincanvas');
+    
+    const N   = 256;
+    const sidebars = 200;
+    const pad = 1.0;
+    const overflow = 0.1;
+    const N1  = N+1;
+    const Ue_cpu_buffer = new Float32Array(N1*N1);
+    const Ui_cpu_buffer = new Float32Array(N1*N1);
+    
+    //const downscale = 0;
+    //const W   = canvas.clientWidth >>downscale;
+    //const H   = canvas.clientHeight>>downscale;
+    const K = 2*N;
+    const W = K;
+    const H = K;
+    canvas.width  = W;
+    canvas.height = H;
+    maincanvas.style.width  = W;
+    maincanvas.style.height = H;
+    console.log('W='+W,'H='+H)
+    
+    frame.style.width = K+2*sidebars;
+    clickblock.style.width = K;
+    clickblock.style.height = K;
+    canvasoverlay.style.width = K;
+    canvasoverlay.style.height = K;
+
+    var gl = getRasterGL(canvas);
+    // bit of a hack
+    gl.width = gl.height = N;
+
+    var dt  = 1.0;         // Euler integrator time step
+    var tskip      = 1;    // Frames to skip between drawing
+    
+    var Te  = 10.0;        // Excitatory population time constant (ms)
+    var Ti  = 10.0;        // Inhibitory population time constant (ms)
+    var Se  = 3.0;         // Excitatory population spread
+    var Si  = 5.0;         // Inhibitory population spread
+    var Sl  = 1.0;         // Local population spread
+    var Aee = 4;           // E-E coupling Aeight
+    var Aie = 4;           // Excitation of Inhibitory coupling Aeight
+    var Aei = 4;           // Inhibition of Excitatory coupling Aeight
+    var Aii = 0;           // I-I coupling Aeight
+    var Wee = 0;           // E-E coupling Aeight
+    var Wie = 0;           // Excitation of Inhibitory coupling Aeight
+    var Wei = 0;           // Inhibition of Excitatory coupling Aeight
+    var Wii = 0;           // I-I coupling Aeight
+    var He  = 2;           // Bias in E cell synaptic input (threshold)
+    var Hi  = 2;           // Bias in I cell synaptic input (threshold)
+    var Ne  = 0;           // Noise level (uniform) in E cells
+    var Ni  = 0;           // Noise level (uniform) in I cells
+    var Ge  = 1;           // Input drive to E cells
+    var Gi  = 0;           // Input drive to I cells
+    
+    var f   = 10;          // Stim frequency Hz
+    var Amp = 0;           // Amplitude of stimulus
+    var Str = 0.8;         // Sinusoidal input stimulus is thresholded
+    
+    var ai  = 20.0;        // Timescale of inhibitory adaptation
+    var ae  = 20.0;        // Timescale of excitatory adaptation
+    var gammae = 100.;     // Timescale of excitatory adaptation activation
+    var bi  = 0;           // Strength of Inhibitory adaptation
+    var be  = 0;           // Strength of Excitatotu adaptation
+    var Ue0 = 0.5;         // Fixed point to linearize around (E part)
+    var Ui0 = 0.5;         // Fixed point to linearize around (I part)
+
+    var stimsize   = 0.3;  // Size of stimulation spot
+    var stimradius = 0.7;  // Radial displacement of simulation spot
+    var bradius    = 0.5;  // boundary mask radius
+    var bhardness  = 0.75; // boundary hardness 
+    var waveform   = "sine";
+    
+    // Simulus
+    const heav = (z)=>(z<.0?.0:z==.0?.5:1.);
+    const Stim = (t)=> ((waveform=="square")? heav(Math.sin(2*Math.PI*t*f/1000.)-Str) : (Math.sin(2*Math.PI*t*f/1000.) )+1)*0.5*Amp;
+    const F  = (x)=>1/(1+Math.exp(-x));
+    const dF = (x)=>F(x)*F(-x);
+        
+    var running = 0;
+
+    // GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_MIRRORED_REPEAT,
+    // GL_REPEAT, or GL_MIRROR_CLAMP_TO_EDGE
+    //var clip_mode = gl.GL_MIRROR_CLAMP_TO_EDGE;
+    var clip_mode = gl.GL_CLAMP_TO_EDGE;
+    var temp1  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var temp2  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var U      = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var V      = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var UC     = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var UC2    = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var noise  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var hist   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var masks  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+    var dohist = getRasterProgram(gl,'histogram');
+    var hblur  = GPUGaussianBlur(gl,5.0);
+    var copy   = GPUcopy(gl,N,N);
+    var blur   = GPUGaussianMultiBlur16(gl,0.5);  // nonlocal blur
+    var local_blur  = GPUGaussianMultiBlur16(gl,2,2);  // local blur
+    var mblur  = GPUGaussianMultiBlur(gl,1,1,1,1); // blur for masks
+    var gpurng = GPUNoise(gl); // noise kernel
+    var rand   = WeakRNG();
+
+    // compiled later after initialization
+    var wc_kernel; 
+    var adapt_kernel;
+    var color;
+    randomize();
+    
+    // We'll recompute masks but not recompile them
+    var getmask_header = compile_bind(get_parameters('generate_masks_kernel-parameters'),{})[0];
+    var mask_kernel = buildRasterProgram(gl,getmask_header+$('generate_masks_kernel').text);
+    
+    /** Put parameters in kernel at compile time to take advantage
+     *  of optimizations.
+     */
+    function compile_kernel() {
+                
+        blur  = GPUGaussianMultiBlur16(gl,Se,Si);
+        local_blur = GPUGaussianMultiBlur16(gl,Sl,Sl);
+        mblur = GPUGaussianMultiBlur(gl,0,Se,Si,Sl); // blur for masks
+        
+        // Recompute masks: TODO: do this only if changed
+        mask_kernel({
+            bradius  :1.0*bradius, //= 0.9; // boundary mask radius
+            bhardness:10+Math.tan(Math.pow(bhardness,.1)*1.5707), //= 0.5; // boundary hardness 
+            },masks);
+        mblur(masks,temp1,masks);
+        
+        var wc_header = compile_bind(
+            get_parameters('wc_kernel-parameters'), {
+            dt : dt,  // Euler integrator time step
+            Te : Te,  // Excitatory population time constant (ms)
+            Ti : Ti,  // Inhibitory population time constant (ms)
+            Aee: Aee, // E-E coupling
+            Aie: Aie, // Excitation of Inhibitory coupling
+            Aei: Aei, // Inhibition of Excitatory coupling
+            Aii: Aii, // I-I coupling
+            Wee: Wee, // E-E coupling (local)
+            Wie: Wie, // Excitation of Inhibitory coupling (local)
+            Wei: Wei, // Inhibition of Excitatory coupling (local)
+            Wii: Wii, // I-I coupling (local)
+            He : He,  // Bias in E cell synaptic input
+            Hi : Hi,  // Bias in I cell synaptic input
+            bi : bi,  // Strength of Inhibitory adaptation
+            be : be,  // Strength of Excitatory adaptation
+            Ge : Ge,  // Simulation gain for e cells
+            Gi : Gi,  // Simulation gain for i cells
+            Ne : Ne,  // Noise level (uniform) in E cells
+            Ni : Ni,  // Noise level (uniform) in I cells
+            stimsize   : 0.5*(1/(.15*stimsize))*(1/(.15*stimsize)),
+               //= 0.3; // Size of stimulation spot
+            stimradius : stimradius*bradius, //= 0.7; // Radial displacement of simulation spot
+        })[0];
+        wc_kernel = buildRasterProgram(gl,wc_header+$('wc_kernel').text);
+
+        var adapt_header = compile_bind(
+            get_parameters('adapt_kernel-parameters'), {
+            dt : dt,  // Euler integrator time step
+            ai : ai,  // Timescale of inhibitory adaptation
+            ae : ae,  // Timescale of excitatory adaptation
+            gammae : gammae, // Adaptation process activation timescale
+        })[0];
+        adapt_kernel = buildRasterProgram(gl,
+            adapt_header+$('adapt_kernel').text);
+        var color_header = compile_bind(
+            get_parameters('colormap-parameters'), {
+            Aee: Aee, // E-E coupling
+            Aie: Aie, // Excitation of Inhibitory coupling
+            Aei: Aei, // Inhibition of Excitatory coupling
+            Aii: Aii, // I-I coupling
+            Wee: Wee, // E-E coupling (local)
+            Wie: Wie, // Excitation of Inhibitory coupling (local)
+            Wei: Wei, // Inhibition of Excitatory coupling (local)
+            Wii: Wii, // I-I coupling (local)
+            Se : Se,  // Standard deviation of E-cell long-range coupling
+            Si : Si,  // Standard deviation of I-cell long-range coupling
+            Sl : Sl,  // Standard deviation of local-scale coupling
+            Te : Te,  // Time constant for E cells
+            Ti : Ti,  // Time constant for I cells
+            He : He,  // Bias in E cell synaptic input (threshold)
+            Hi : Hi,  // Bias in I cell synaptic input (threshold)
+            bi : bi,  // Strength of Inhibitory adaptation
+            be : be,  // Strength of Excitatory adaptation
+            Ue0: Ue0,
+            Ui0: Ui0, 
+        })[0];
+        color = buildRasterProgram(gl,color_header+$('colormap').text);
+
+    }
+
+    var inputs = document.getElementsByTagName("input");
+    var controls = [];
+    
+    for (var i=0; i<inputs.length; i++)
+        if (inputs[i].type=='number') {
+            controls.push(inputs[i]);
+            var input = inputs[i];
+            input.addEventListener('input',compile_kernel);
+        }
+        
+
+    var buttons = [];
+    var stopstartbutton;
+    for (var i=0; i<inputs.length; i++) {
+        var button = inputs[i];
+        if (button.type=='button') {
+            buttons.push(button);
+            button.onclick = (function(button){return function(click) {
+                eval(button.value.replace(/\s/g,'').toLowerCase()+'()');
+            };})(button);
+            if (button.value=='Start') {
+                stopstartbutton=button;
+                button.style.width = button.offsetWidth;
+            }
+        }
+    }
+    function start() {
+        if (!running) setTimeout(iterate, 0);
+        running = 1;
+        stopstartbutton.value = "Stop";
+        canvasoverlay.style.display = "none";
+    }
+    function stop() {
+        running = 0;
+        stopstartbutton.value = "Start";
+    }
+    function step() {
+        stop();
+        iterate();
+    }
+    function nothing()   {}
+    function randomize() {
+        gpurng.randomize(U);
+        gpurng.randomize(V);
+        gpurng.randomize(noise);
+        iterate();
+    }
+
+    eval(presets[0][1]);
+    compile_kernel();
+
+    var timestep = 0;
+    function iterate() {
+        try {
+            for (var i=0; i<tskip; i++) {
+                if (Ne>0||Ni>0) {
+                    gpurng(noise,temp1);
+                }
+                blur(U,temp1,UC);
+                if (Sl>0) {
+                    local_blur(U,temp1,UC2);
+                } else {
+                    copy(U,UC2);
+                }
+                wc_kernel({
+                    Uin   :U,
+                    Vin   :V,
+                    Uconv :UC,
+                    Uconv2:UC2,
+                    noise :noise,
+                    masks :masks,
+                    s     :Stim(timestep*dt),
+                    },temp1);
+                adapt_kernel({
+                    Uin   :U,
+                    Vin   :V
+                    },temp2);
+                copy(temp1,U);
+                copy(temp2,V);
+                timestep += 1;
+            }
+            dohist({Uin:U},temp1);
+            hblur(temp1,temp2,temp1);
+            color({
+                dpi: Math.max(1,Math.ceil(1./window.devicePixelRatio)),
+                hist:temp1,
+                Uin :U,
+                Vin :V});
+        } catch (err) {
+            console.log(err.message);
+        }
+        if (running) requestAnimationFrame(iterate);
+    }
+
+    hidingframe.style.display = "none";
+    clickblock.style.display  = "none";
+    clickblock.style.cursor   = "pointer";
+    var startfun = function(e) {
+        canvasoverlay.style.display = "none";
+        clickblock.style.display    = "none";
+        start();
+    };
+    clickblock.onclick    = startfun;
+    canvasoverlay.onclick = startfun;
+
+    console.log('Initialization complete');
+}
+
+function waitForMathJax()
+{
+    console.log('Waiting for MathJax to load');
+    try {
+        MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
+        MathJax.Hub.Queue(main);
+    } catch(e) {
+        console.log('MathJax is missing, continuing without it');
+        main();
+    }
+}
+</script>
+</body>
+</html>
+
+
