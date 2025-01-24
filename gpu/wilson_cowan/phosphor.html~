@@ -308,11 +308,11 @@ This page requires WebGL and JavaScript.<br/><br/>
     <div class="controlbox" style="font-size:80%;position:relative;">
     </div>
     <div style="position:relative;">
-        <canvas id='maincanvas' style="position:absolute; left:0px; z-index: 1;"> 
+        <canvas id='maincanvas' style="position:absolute; left:50px; z-index: 1;"> 
             This application relies on the HTML5 Canvas element and Javascript. 
             If you have Javascript disabled, try re-enabling it for this page. 
         </canvas>
-        <div id='canvasoverlay' style="position:absolute; left:0px; z-index:4;">
+        <div id='canvasoverlay' style="position:absolute; left:50px; z-index:4;">
             <div style="display: table-cell; vertical-align: middle;">
             Click
             </div>
