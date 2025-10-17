@@ -3,9 +3,9 @@
 This project builds on the [WebGL examples for GPGPU computing](https://github.com/michaelerule/webgpgpu) to develop in-browser WebGL implementations of Wilson-Cowan style neural field equations. These examples [can be browsed as a website here](https://michaelerule.github.io/neuralfield/). This project is ever in-development; Please open an issue if you'd like a specific stable configuration to demonstrate a particular effect. 
 
 Older versions are [here](https://michaelerule.github.io/neuralfield/gpu/wilson_cowan/index.html).
-[The most recent WebGL implementation can be found here](https://michaelerule.github.io/neuralfield/gpu/wilson_cowan/wilson_cowan_gpu_v12_zero_boundary_region.html), and should look like this:
+[The most recent WebGL implementation can be found here](https://michaelerule.github.io/neuralfield/gpu/wilson_cowan/wilson_cowan_gpu_v12c_zero_boundary_region_partly_sanitized_for_teaching.html), and should look like this:
 
-[![Screenshot at 2022-11-07 16-37-24](https://user-images.githubusercontent.com/687425/200365734-4fb6722c-bc61-4379-8fb0-67a9be091ce3.png)](https://michaelerule.github.io/neuralfield/gpu/wilson_cowan/wilson_cowan_gpu_v12_zero_boundary_region.html)
+[![Screenshot at 2022-11-07 16-37-24](https://user-images.githubusercontent.com/687425/200365734-4fb6722c-bc61-4379-8fb0-67a9be091ce3.png)](https://michaelerule.github.io/neuralfield/gpu/wilson_cowan/wilson_cowan_gpu_v12c_zero_boundary_region_partly_sanitized_for_teaching.html)
 
 This project predates the widespread availability of floating-point shaders as supported in WebGL3, and therefore uses 8- or 16-bit fixed point representations. This restriction is not so severe for neural field models phrased in terms of a firing rate in [0,1]. 
 If the more recent 16-bit demos are too slow on your device, the [original 8-bit WebGL implementation](https://michaelerule.github.io/neuralfield/gpu/wilson_cowan/wilson_cowan_gpu_v01_8bit.html), which is less accurate but friendlier to older hardware/browsers. If your browser doesn't support WebGL, you can try the original [CPU implementation here.](https://michaelerule.github.io/neuralfield/cpu/wilson_cowan/wilson_cowan_cpu_adapt.html)
