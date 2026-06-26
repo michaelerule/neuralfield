@@ -22,7 +22,6 @@ function createGaussianConvolution(sigma,normalized,radius) {
  * @param sigma {number} - kernel standard deviation in pixels
  */
 function GPUGaussianBlur(gl,sigma) {
-
     var __gpu_blur_kernel__ =
      "// Gaussian blue in X or Y directions\n"
     +"// Variables W, H, K, AX #defined when shader compiled\n"
@@ -42,7 +41,6 @@ function GPUGaussianBlur(gl,sigma) {
     +"  c/=sum;\n"
     +"  gl_FragColor = floor(255.*c+.5)/255.;\n"
     +"}\n";
-
     var kernel = createGaussianConvolution(sigma);
     var blur_x = buildRasterProgram(gl,__gpu_blur_kernel__,{
         K  : kernel.radius,
@@ -141,7 +139,6 @@ function GPUGaussianMultiBlur(gl,sigmaR,sigmaG,sigmaB,sigmaA) {
  * @param sigma {number} - kernel standard deviation in pixels
  */
 function GPUGaussianMultiBlur16(gl,sigmaRG,sigmaBA) {
-
     var __gpu_blur_kernel__ =
      "// Gaussian blue in X or Y directions\n"
     +"// Variables W, H, K, AX #defined when shader compiled\n"
@@ -173,36 +170,24 @@ function GPUGaussianMultiBlur16(gl,sigmaRG,sigmaBA) {
     +"      EncodeFloatXY(c.x),\n"
     +"      EncodeFloatXY(c.y));\n"
     +"}\n";
-
     sigmaRG = sigmaRG || 1;
     sigmaBA = sigmaBA || sigmaRG;
     var sigma  = Math.max(sigmaRG,sigmaBA);
     var radius = Math.ceil(3*sigma);
     var kernelRG = createGaussianConvolution(sigmaRG,true,radius);
     var kernelBA = createGaussianConvolution(sigmaBA,true,radius);
-    
-    // Pack each channel kernel into array. This will be passed
-    // to the shader
+    // Pack each channel kernel into array; Will be passed to the shader
     var kernel = new Float32Array(2*(2*radius+1));
     for (i=0; i<=2*radius; i++) {
         kernel[i*2+0] = kernelRG[i];
         kernel[i*2+1] = kernelBA[i];
     }
-    //console.log(radius);
-    //console.log(kernel);
-
-    var blur_x = buildRasterProgram(gl,__gpu_blur_kernel__,{
-        K  : radius,
-        AX : 0
-    });
-    var blur_y = buildRasterProgram(gl,__gpu_blur_kernel__,{
-        K  : radius,
-        AX : 1
-    });
+    var blur_x = buildRasterProgram(gl,__gpu_blur_kernel__,{K:radius,AX:0});
+    var blur_y = buildRasterProgram(gl,__gpu_blur_kernel__,{K:radius,AX:1});
     function gpu_blur(indata,temp,outdata) {
         outdata = outdata || indata;
-        blur_x( {weights:kernel, data:indata}, temp    );
-        blur_y( {weights:kernel, data:temp  }, outdata );
+        blur_x({weights:kernel, data:indata}, temp   );
+        blur_y({weights:kernel, data:temp  }, outdata);
     };
     gpu_blur.source = __gpu_blur_kernel__;
     gpu_blur.kernel = kernel;

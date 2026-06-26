@@ -99,21 +99,9 @@ void main() {
     float Ui = DecodeFloatXY(U.zw);
     float Ve = DecodeFloatXY(V.xy); // adaptation variables
     float Vi = DecodeFloatXY(V.zw);
-    // Note: blurred masks standard deviations are xyzw = 0,Se,Si,Sl
-    // Use these to correctly normalize convolutions near boundaries
-    vec4 m = texture2D(masks,XY);
-    // Normalize convoltion near boundary
-    // Note 20230523: I've removed this to pull boundary to zero
-    //Ce = Ce/m.y;
-    //Ci = Ci/m.z;
-    //Le = Le/m.w;
-    //Li = Li/m.w;
-    // Stimulus
+    // Stimulus with stripes
     float  d = length(XY-vec2(0.5,0.5)+vec2(0.5,0.5)*stimradius);
-    float s2 = s*exp(-(d*d)*stimsize);
-    // Add the stripes
-    float sr = cos(XY.x*stripes*twopi);
-    s2 = s2*sr;
+    float s2 = s*exp(-(d*d)*stimsize)*0.5*(1.0+cos(XY.x*stripes*twopi));
     // Firing rates
     float Ae  = F(Wee*Le-Wei*Li+Aee*Ce-Aei*Ci-He+Ge*s2-Ve*be+Ne*N.x);
     float Ai  = F(Wie*Le-Wii*Li+Aie*Ce-Aii*Ci-Hi+Gi*s2-Vi*bi+Ni*N.y);
@@ -128,7 +116,7 @@ void main() {
     // Save
     gl_FragColor = vec4(
         EncodeFloatXY(Ue_out),
-        EncodeFloatXY(Ui_out))*m.x;
+        EncodeFloatXY(Ui_out));
 }
 </script>
 
@@ -555,15 +543,6 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
             </div>
         </div>
         <div class="controltext">
-            Boundary
-        </div>
-        <div style="clear:both;display:block">
-            <div class="controls" style="width:200px;">
-                <div class="control">radius<input type="number" step="0.05" max="1"  min="0" name="bradius" value="0.45"/></div>
-                <div class="control">hardness<input type="number" step="0.05" max="1"  min="0" name="bhardness" value="0.5"/></div>
-            </div>
-        </div>
-        <div class="controltext">
             Stripes
         </div>
         <div style="clear:both;display:block">
@@ -771,15 +750,15 @@ presets=[
 'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.2;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
 ['plasma',
 'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0.2;Se=2.9;Sl=1.5;Aii=4.5;Aie=20.3;Aee=11.8;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.1;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.2;bradius=1;bhardness=1;'],
-['physarium-like 1?',
+['physarum-like 1?',
 'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.1;Se=4;Sl=1.7;Aii=5.9;Aie=20.3;Aee=11.4;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.7;ai=5;bi=3.8;ae=100;gammae=2;be=0.4;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.4;bradius=1;bhardness=1;'],
-['physarium-like 2?',
+['physarum-like 2?',
 'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2.1;Se=1.7;Sl=0.8;Aii=5.6;Aie=20.3;Aee=12;Aei=5.1;Ti=4.7;Te=2.6;Hi=6.2;He=3.25;Gi=0;Ge=0;Ni=0;Ne=0.7;ai=5;bi=3.8;ae=100;gammae=2.1;be=0.8;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.4;bradius=1;bhardness=1;'],
-['physarium-like 3?',
+['physarum-like 3?',
 'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.9;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['physarium-like 4?',
+['physarum-like 4?',
 'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=5.7;Se=3.5;Sl=1.7;Aii=4.3;Aie=20.3;Aee=11.1;Aei=5.1;Ti=11.1;Te=4.3;Hi=6.4;He=3.28;Gi=0;Ge=0;Ni=0;Ne=0.8;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=0;stimsize=100;stimradius=0;tskip=2;dt=0.6;bradius=1;bhardness=1;'],
-['physarium-like 5?',
+['physarum-like 5?',
 'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=0;Se=2.7;Sl=1.5;Aii=3.9;Aie=20.6;Aee=11.8;Aei=5.2;Ti=5.6;Te=2.7;Hi=6.4;He=3.28;Gi=0;Ge=0.4;Ni=0;Ne=0.4;ai=5;bi=3.6;ae=500;gammae=2;be=0.2;Amp=11;f=2;stimsize=0.1;stimradius=0;tskip=2;dt=0.5;bradius=1;bhardness=1;'],
 ['Resonant positive dispersion 1',
 'waveform="sine";Wii=0;Wie=4.8;Wee=8.2;Wei=4.5;Si=4;Se=10.7;Sl=0;Aii=0;Aie=0;Aee=1;Aei=0;Ti=2.1;Te=2.2;Hi=2.45;He=2.4;Gi=0;Ge=1;Ni=0;Ne=0;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.2;f=25;stimsize=0.2;stimradius=0.4;tskip=20;dt=0.1;bradius=1;bhardness=1;'],
@@ -803,6 +782,8 @@ presets=[
 'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.1;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=5.9;Te=6;Hi=2.45;He=2.375;Gi=0;Ge=0.4;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
 ['Resonant positive dispersion 11',
 'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.1;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=5.9;Te=6;Hi=2.45;He=2.375;Gi=0;Ge=0.4;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
+['Stripe 1',
+'waveform="square";Aii=5.9;Aie=20.3;Aee=10.8;Aei=5.1;Si=5.3;Se=3.2;Wii=0;Wie=0;Wee=0;Wei=0;Sl=1.7;Ti=9;Te=2.7;Hi=6.05;He=3.25;Gi=0;Ge=0.1;Ni=0;Ne=0.1;ai=5;bi=3;ae=100;gammae=2;be=0;Amp=2.1;f=0;stimsize=100;stimradius=0;tskip=5;dt=0.2;bradius=1;bhardness=1;stripes=10;'],
 ]
 
 
@@ -1225,12 +1206,10 @@ function main() {
         iterate();
     }
     function statestring() {
-        var state='waveform="'+waveform+'";';
-        for (var i=0; i<controls.length; i++) {
-            var control = controls[i];
-            state += control.name+'='+control.value+';';
-        }
-        return state;
+        var s='waveform="'+waveform+'";';
+        for (var i=0; i<controls.length; i++) 
+            s+=controls[i].name+'='+controls[i].value+'; ';
+        return s;
     }
     function save() {
         var wasrunning = running;

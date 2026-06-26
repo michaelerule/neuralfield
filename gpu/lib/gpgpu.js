@@ -196,8 +196,8 @@ function bindTexture(gl,program,varname,index,texture) {
  *                                  See source for supported params.
  */
 function newTexture(gl,params) {
-    // Perform some validation and checking of arguments -- not all combinations
-    // are permitted
+    // Perform some validation and checking of arguments
+    // not all combinations are permitted
     var W = params['size'] || params['width' ] || gl.width ;// || 256;
     var H = params['size'] || params['height'] || gl.height;// || 256;
     var XEDGE = params['wrap_s'] || params['wrap'] || gl.CLAMP_TO_EDGE;
@@ -211,10 +211,8 @@ function newTexture(gl,params) {
     var texture = gl.createTexture();
     var target  = params['target'] || gl.TEXTURE_2D;
     gl.bindTexture(target, texture);
-    gl.texParameteri(target,
-        gl.TEXTURE_MAG_FILTER, params['mag_filter'] || gl.LINEAR);
-    gl.texParameteri(target,
-        gl.TEXTURE_MIN_FILTER, params['min_filter'] || gl.LINEAR);
+    gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, params['mag_filter'] || gl.LINEAR);
+    gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, params['min_filter'] || gl.LINEAR);
     gl.texParameteri(target, gl.TEXTURE_WRAP_S,XEDGE);
     gl.texParameteri(target, gl.TEXTURE_WRAP_T,YEDGE);
     // remaining parameters set by texImage2D
@@ -229,6 +227,7 @@ function newTexture(gl,params) {
     texture.width  = W;
     texture.height = H;
     texture.gl = gl;
+    texture.params = params;
     return texture;
 }
 
@@ -265,15 +264,13 @@ function newBasicFramebuffer(gl,params) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
     var texture = newTexture(gl,params||{});
     // Put the new texture in this framebuffer
-    gl.framebufferTexture2D(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
-        texture, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);
+    // Add useful information to resulting object
     framebuffer.gl      = gl;
     framebuffer.texture = texture;
     framebuffer.width   = texture.width ;
     framebuffer.height  = texture.height;
+    framebuffer.params  = texture.params;
     return framebuffer;
 }
 
