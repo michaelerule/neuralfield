@@ -101,7 +101,7 @@ void main() {
     float Vi = DecodeFloatXY(V.zw);
     // Stimulus with stripes
     float  d = length(XY-vec2(0.5,0.5)+vec2(0.5,0.5)*stimradius);
-    float s2 = s*exp(-(d*d)*stimsize)*0.5*(1.0+cos(XY.x*stripes*twopi));
+    float s2 = s*exp(-(d*d)*stimsize)*0.5*(1.0+sin(XY.x*stripes*twopi));
     // Firing rates
     float Ae  = F(Wee*Le-Wei*Li+Aee*Ce-Aei*Ci-He+Ge*s2-Ve*be+Ne*N.x);
     float Ai  = F(Wie*Le-Wii*Li+Aie*Ce-Aii*Ci-Hi+Gi*s2-Vi*bi+Ni*N.y);
@@ -704,6 +704,10 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
 presets=[
 ['Stripe 6',
 'waveform="square";Aii=8.2; Aie=20.4; Aee=10.5; Aei=6.7; Si=4.1; Se=2.5; Wii=0; Wie=0; Wee=0; Wei=0; Sl=1.7; Ti=5.8; Te=2.5; Hi=6.2; He=3.1; Gi=0.2; Ge=0.2; Ni=0; Ne=1; ai=5; bi=3; ae=100; gammae=2; be=0; Amp=1; f=0; stimsize=100; stimradius=0; tskip=10; dt=0.1; stripes=10; '],
+[' Benjamin-Feir????',
+'waveform="sine";Aii=8.2; Aie=20.1; Aee=10.5; Aei=6.7; Si=4.1; Se=2.5; Wii=0; Wie=0; Wee=0; Wei=0; Sl=1.7; Ti=5.8; Te=2.5; Hi=6.2; He=3.1; Gi=0.2; Ge=0.2; Ni=0; Ne=0.1; ai=5; bi=3; ae=100; gammae=2; be=0; Amp=0.2; f=0; stimsize=100; stimradius=0; tskip=10; dt=0.1; stripes=0; '],
+['Flicker Stripe 1',
+'waveform="sine";Aii=8.2; Aie=20.1; Aee=10.5; Aei=6.7; Si=4.1; Se=2.5; Wii=0; Wie=0; Wee=0; Wei=0; Sl=1.7; Ti=5.8; Te=2.5; Hi=6.2; He=3.1; Gi=0.2; Ge=0.2; Ni=0; Ne=1; ai=5; bi=3; ae=100; gammae=2; be=0; Amp=0.3; f=26; stimsize=100; stimradius=0; tskip=10; dt=0.1; stripes=8; '],
 ['Stripe 5',
 'waveform="square";Aii=8.2; Aie=20.4; Aee=10.5; Aei=6.7; Si=4; Se=2.5; Wii=0; Wie=0; Wee=0; Wei=0; Sl=1.7; Ti=5.8; Te=2.5; Hi=6.2; He=3.1; Gi=0.1; Ge=0.2; Ni=0; Ne=1; ai=5; bi=3; ae=100; gammae=2; be=0; Amp=0.5; f=0; stimsize=100; stimradius=0; tskip=10; dt=0.1; stripes=9; '],
 ['Stripe 4',
