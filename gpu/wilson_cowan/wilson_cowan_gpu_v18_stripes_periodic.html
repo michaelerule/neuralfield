@@ -34,6 +34,7 @@ sampler2D Uconv;
 sampler2D Uconv2;
 sampler2D noise;
 sampler2D masks;
+float stripes; // number of wavelengths for striped stimulation 
 float dt;  // Euler integrator time step
 float Te;  // Excitatory population time constant (ms)
 float Ti;  // Inhibitory population time constant (ms)
@@ -110,6 +111,9 @@ void main() {
     // Stimulus
     float  d = length(XY-vec2(0.5,0.5)+vec2(0.5,0.5)*stimradius);
     float s2 = s*exp(-(d*d)*stimsize);
+    // Add the stripes
+    float sr = cos(XY.x*stripes*twopi);
+    s2 = s2*sr;
     // Firing rates
     float Ae  = F(Wee*Le-Wei*Li+Aee*Ce-Aei*Ci-He+Ge*s2-Ve*be+Ne*N.x);
     float Ai  = F(Wie*Le-Wii*Li+Aie*Ce-Aii*Ci-Hi+Gi*s2-Vi*bi+Ni*N.y);
@@ -559,6 +563,14 @@ This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br
                 <div class="control">hardness<input type="number" step="0.05" max="1"  min="0" name="bhardness" value="0.5"/></div>
             </div>
         </div>
+        <div class="controltext">
+            Stripes
+        </div>
+        <div style="clear:both;display:block">
+            <div class="controls" style="width:200px;">
+                <div class="control">stripes<input type="number" step="1" max="30"  min="0" name="stripes" value="0"/></div>
+            </div>
+        </div>
 
     </div>
 
@@ -789,8 +801,8 @@ presets=[
 'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.4;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=5.9;Te=6;Hi=2.45;He=2.375;Gi=0;Ge=0.4;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
 ['Resonant positive dispersion 10',
 'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.1;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=5.9;Te=6;Hi=2.45;He=2.375;Gi=0;Ge=0.4;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
-['Resonant positive dispersion 11','waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.1;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=5.9;Te=6;Hi=2.45;He=2.375;Gi=0;Ge=0.4;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
-['BT','waveform="square";Aii=3;Aie=21.2;Aee=12.5;Aei=8.5;Si=3.1;Se=1.3;Wii=0;Wie=0;Wee=0;Wei=0;Sl=2;Ti=20;Te=6.8;Hi=6.175;He=3.275;Gi=0;Ge=1;Ni=0;Ne=0;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0;f=8;stimsize=100;stimradius=0;tskip=20;dt=0.1;bradius=100;bhardness=1;'],
+['Resonant positive dispersion 11',
+'waveform="square";Wii=0;Wie=4.8;Wee=8.4;Wei=4.5;Si=1.9;Se=1.1;Sl=0.5;Aii=0.2;Aie=0;Aee=0.6;Aei=0.1;Ti=5.9;Te=6;Hi=2.45;He=2.375;Gi=0;Ge=0.4;Ni=0;Ne=0.3;ai=9;bi=0;ae=1;gammae=1;be=0;Amp=0.4;f=8;stimsize=33;stimradius=0;tskip=10;dt=0.1;bradius=1;bhardness=1;'],
 ]
 
 
@@ -897,6 +909,8 @@ function main() {
     var dt  = 1.0;         // Euler integrator time step
     var tskip      = 1;    // Frames to skip between drawing
     
+    var stripes = 10;
+
     var Te  = 10.0;        // Excitatory population time constant (ms)
     var Ti  = 10.0;        // Inhibitory population time constant (ms)
     var Se  = 3.0;         // Excitatory population spread
@@ -944,7 +958,7 @@ function main() {
     
     // Simulus
     const heav = (z)=>(z<.0?.0:z==.0?.5:1.);
-    const Stim = (t)=> ((waveform=="square")? heav(Math.sin(2*Math.PI*t*f/1000.)-Str) : (Math.sin(2*Math.PI*t*f/1000.) )+1)*0.5*Amp;
+    const Stim = (t)=> ((f==0)?1:((waveform=="square")? heav(Math.cos(2*Math.PI*t*f/1000.)-Str) : (Math.sin(2*Math.PI*t*f/1000.) )+1)*0.5)*Amp;
     const F  = (x)=>1/(1+Math.exp(-x));
     const dF = (x)=>F(x)*F(-x);
     
@@ -1026,13 +1040,11 @@ function main() {
             compile_kernel();
         }
     };
-    
     var running = 0;
-
     // GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_MIRRORED_REPEAT,
     // GL_REPEAT, or GL_MIRROR_CLAMP_TO_EDGE
     //var clip_mode = gl.GL_MIRROR_CLAMP_TO_EDGE;
-    var clip_mode = gl.GL_CLAMP_TO_EDGE;
+    var clip_mode = gl.GL_REPEAT;
     var temp1  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
     var temp2  = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
     var U      = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
@@ -1050,44 +1062,34 @@ function main() {
     var mblur  = GPUGaussianMultiBlur(gl,1,1,1,1); // blur for masks
     var gpurng = GPUNoise(gl); // noise kernel
     var rand   = WeakRNG();
-
     // compiled later after initialization
     var wc_kernel; 
     var adapt_kernel;
     var color;
     randomize();
-    
     // We'll recompute masks but not recompile them
     var getmask_header = compile_bind(get_parameters('generate_masks_kernel-parameters'),{})[0];
     var mask_kernel = buildRasterProgram(gl,getmask_header+$('generate_masks_kernel').text);
-    
-    /** Put parameters in kernel at compile time to take advantage
-     *  of optimizations.
-     */
+    // Set kernel parameters at compile to take advantage of optimizations.
     function compile_kernel() {
         try {
             for (var i=0; i<controls.length; i++) {
                 var control = controls[i];
                 eval(control.name+'='+control.value);
+                if (control.name=="stripes") console.log(control.name+'='+control.value);
             }
-        } catch (err) {
-            console.log(err.message);
-        }
-        
+        } catch (err) {console.log(err.message);}
         // Move the fixed point Ue0 Ui0 to nearest actual fixed point.
         follow();
-        
         blur  = GPUGaussianMultiBlur16(gl,Se,Si);
         local_blur = GPUGaussianMultiBlur16(gl,Sl,Sl);
         mblur = GPUGaussianMultiBlur(gl,0,Se,Si,Sl); // blur for masks
-        
         // Recompute masks: TODO: do this only if changed
         mask_kernel({
             bradius  :1.0*bradius, //= 0.9; // boundary mask radius
             bhardness:10+Math.tan(Math.pow(bhardness,.1)*1.5707), //= 0.5; // boundary hardness 
             },masks);
         mblur(masks,temp1,masks);
-        
         var wc_header = compile_bind(
             get_parameters('wc_kernel-parameters'), {
             dt : dt,  // Euler integrator time step
@@ -1109,12 +1111,12 @@ function main() {
             Gi : Gi,  // Simulation gain for i cells
             Ne : Ne,  // Noise level (uniform) in E cells
             Ni : Ni,  // Noise level (uniform) in I cells
+            stripes:stripes,
             stimsize   : 0.5*(1/(.15*stimsize))*(1/(.15*stimsize)),
                //= 0.3; // Size of stimulation spot
             stimradius : stimradius*bradius, //= 0.7; // Radial displacement of simulation spot
         })[0];
         wc_kernel = buildRasterProgram(gl,wc_header+$('wc_kernel').text);
-
         var adapt_header = compile_bind(
             get_parameters('adapt_kernel-parameters'), {
             dt : dt,  // Euler integrator time step
@@ -1147,26 +1149,21 @@ function main() {
             Ui0: Ui0, 
         })[0];
         color = buildRasterProgram(gl,color_header+$('colormap').text);
-
     }
-
     function nothing()   {}
     function randomize() {
         gpurng.randomize(U);
         gpurng.randomize(V);
         gpurng.randomize(noise);
     }
-
     var inputs = document.getElementsByTagName("input");
     var controls = [];
-    
     for (var i=0; i<inputs.length; i++)
         if (inputs[i].type=='number') {
             controls.push(inputs[i]);
             var input = inputs[i];
             input.addEventListener('input',compile_kernel);
         }
-        
     function setcontrols() {
         for (var i=0; i<controls.length; i++) {
             var control = controls[i];
@@ -1176,7 +1173,6 @@ function main() {
         waveformtoggle.innerHTML = waveform;
         compile_kernel();
     }
-
     var buttons = [];
     var stopstartbutton;
     for (var i=0; i<inputs.length; i++) {
@@ -1198,14 +1194,8 @@ function main() {
         stopstartbutton.value = "Stop";
         canvasoverlay.style.display = "none";
     }
-    function stop() {
-        running = 0;
-        stopstartbutton.value = "Start";
-    }
-    function step() {
-        stop();
-        iterate();
-    }
+    function stop() {running = 0;stopstartbutton.value = "Start";}
+    function step() {stop();iterate();}
     function statestring() {
         var state='waveform="'+waveform+'";';
         for (var i=0; i<controls.length; i++) {
@@ -1221,12 +1211,7 @@ function main() {
             "They can be reloaded using the 'Load' button.\n", statestring());
         if (wasrunning) start();
     }
-    function loadstring(s) {
-        eval(s);
-        setcontrols();
-        randomize();
-        start();
-    }
+    function loadstring(s) {eval(s);setcontrols();randomize();start();}
     function load() {
         stop();
         result = prompt("Paste saved parameters below:\n","");
@@ -1239,8 +1224,8 @@ function main() {
         var pdat = presets[i][1];
         var ps = document.createElement("div");
         ps.setAttribute("class","squarebutton");
-        ps.innerHTML = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzαβγδεφθιηκλμνπϟρστυωξζ'[i];
-        //ps.innerHTML = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヰヱヲ'[i];
+        //ps.innerHTML = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzαβγδεφθιηκλμνπϟρστυωξζ'[i];
+        ps.innerHTML = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヰヱヲ'[i];
         var st = document.createElement("div");
         st.setAttribute("class","info");
         st.innerHTML = name;
