@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html>
+<!-- Flicker javascript demo (c) Michael Rule 2015 -->
+<head>
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+<meta content="utf-8" http-equiv="encoding">
+<script src="../lib/colormaps.js"></script>
+<script src="../lib/gpgpu.js"></script>
+<script src="../lib/gpugaussian.js"></script>
+<script src="../lib/gpurand.js"></script>
+<script src="../lib/parameters.js"></script>
+<link rel="stylesheet" type="text/css" href="wc.css">
+<title>Wilson-Cowan on the GPU and in your browser</title>
+<script type="text/x-mathjax-config">MathJax.Hub.Config({tex2jax:{inlineMath:[['$','$'],['\\(','\\)']]}});</script>
+<script type="text/javascript"src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+<script id="wc_kernel-parameters" type="x-fragment-parameters">
+// MAIN WILSON COWAN KERNEL
+// color space: (light,dark)(yellow,blue)(red,green)
+// default channels    (light, yellow, red  )
+// complement channels (dark,  blue  , green)
+sampler2D Uep;
+sampler2D Uem;
+sampler2D Uip;
+sampler2D Uim;
+sampler2D Cep;
+sampler2D Cem;
+sampler2D Cip;
+sampler2D Cim;
+sampler2D noise;
+float dt;  // Euler integrator time step
+float Te;  // Excitatory population time constant (ms)
+float Ti;  // Inhibitory population time constant (ms)
+float Aee; // E-E coupling
+float Aii; // I-I coupling 
+float Aei; // Inhibition of Excitatory coupling
+float Aie; // Excitation of Inhibitory coupling
+float He;  // Bias in E cell synaptic input
+float Hi;  // Bias in I cell synaptic input
+float Ne;  // Noise level (uniform) in E cells
+float Gi;  // Gain on stimulation of i cells
+float Ge;  // Gain on stimulation of e cells
+float s;   // External stimulation
+float Oee; // E-E coupling (light--dark)
+float Oie; // Inhibition of Excitatory coupling (light--dark)
+</script>
+<script id="wc_kernel_e" type="x-fragment">
+#define twopi 6.283185307179586
+#define F(x) (clamp((1./(1.+exp(-(x)))),0.,1.))
+vec4 EncodeFloat(vec4 v) {return clamp(floor(255.0*v+0.5)/255.0,0.0,1.0);}
+void main() {// !!!! Wilson Cowan Rate Kernel E cells
+  vec2 XY = gl_FragCoord.xy/vec2(W,H);
+  // Uniform noise, then Gaussian via Box-Muller
+  vec4 n = texture2D(noise, XY)*0.999+0.0001;
+  vec2 r = sqrt(-2.*log(n.xy)*dt);
+  vec2 h = twopi*n.zw;
+  vec4 N = vec4(r*cos(h),r*sin(h));
+  // Positive and negative channels (LYR,DBG), EI cells, and their convolutions
+  vec4 uep=texture2D(Uep,XY), uip=texture2D(Uip,XY), uem=texture2D(Uem,XY), uim=texture2D(Uim,XY);
+  vec4 cep=texture2D(Cep,XY), cip=texture2D(Cip,XY), cem=texture2D(Cem,XY), cim=texture2D(Cim,XY);
+  vec4 Re = F(Aee*cep - Aei*cip + Oee*cem - He + Ge*s + Ne*N);
+  gl_FragColor = EncodeFloat(exp(-dt/Te)*(uep-Re)+Re);
+}
+</script>
+<script id="wc_kernel_i" type="x-fragment">
+#define twopi 6.283185307179586
+#define F(x) (clamp((1./(1.+exp(-(x)))),0.,1.))
+vec4 EncodeFloat(vec4 v) {return clamp(floor(255.0*v+0.5)/255.0,0.0,1.0);}
+void main() {// !!!! Wilson Cowan Rate Kernel I cells
+  vec2 XY = gl_FragCoord.xy/vec2(W,H);
+  // Uniform noise, then Gaussian via Box-Muller
+  vec4 n = texture2D(noise, XY)*0.999+0.0001;
+  vec2 N = vec2(sqrt(-2.*log(n.xy))*cos(twopi*n.zw))*sqrt(dt);
+  // Positive and negative channels (LYR,DBG), EI cells, and their convolutions
+  vec4 uep=texture2D(Uep,XY), uip=texture2D(Uip,XY), uem=texture2D(Uem,XY), uim=texture2D(Uim,XY);
+  vec4 cep=texture2D(Cep,XY), cip=texture2D(Cip,XY), cem=texture2D(Cem,XY), cim=texture2D(Cim,XY);
+  vec4 Ri = F(Aie*cep - Aii*cip + Oie*cem - Hi + Gi*s);
+  gl_FragColor = EncodeFloat(exp(-dt/Ti)*(uip-Ri)+Ri);
+}
+</script>
+
+<script id="histogram" type="x-shader/x-fragment">
+uniform sampler2D Ue;
+uniform sampler2D Ui;
+void main() {// !!!! Histogram
+  vec2  XY = gl_FragCoord.xy/vec2(W,H);
+  vec4  ue = texture2D(Ue,XY);
+  vec4  ui = texture2D(Ui,XY);
+  vec4  d  = vec4(1.0);
+  for (int y=0; y<H; y+=(H/16)) {
+    for (int x=0; x<W; x+=(W/16)) { 
+      vec2 z = clamp(vec2(float(x),float(y))/vec2(W,H)+XY,0.2,1.-0.2);
+      // Distance between pixel state and histogram bin center
+      vec4 de = texture2D(Ue,z) - XY.x;
+      vec4 di = texture2D(Ui,z) - XY.y;
+      vec4 dd = de*de+di*di;
+      // If state is close to (within) this bin, increment
+      d = d * (1.0 - vec4(lessThan(dd,vec4(0.0005))));
+    }
+  }
+  gl_FragColor = pow(1.0-pow(d,vec4(10.)),vec4(0.2));
+}
+</script>
+
+<script id="colormap-parameters" type="x-fragment-parameters">
+// !!!!!!!!!! COLORMAP
+sampler2D Uep;
+sampler2D Uip;
+sampler2D Uem;
+sampler2D Uim;
+sampler2D hist; 
+float Aee; // E-E coupling
+float Aie; // Excitation of Inhibitory coupling
+float Aei; // Inhibition of Excitatory coupling
+float Aii; // I-I coupling
+float Se;  // Excitatory standard deviation
+float Si;  // Inihibotry standard deviation
+float Te;  // Time constant E
+float Ti;  // Time constant I
+float He;  // Bias in E cell synaptic input
+float Hi;  // Bias in I cell synaptic input
+float Ue0; // Fixed point E
+float Ui0; // Fixed point I
+float dpi; // screen DPI needed to capture hairlines correctly
+</script>
+<script id="colormap" type="x-shader/x-fragment">
+#define PADFACTOR 1.0
+#define OVERFLOW 0.1
+#define twopi 6.283185307179586
+#define F(x) (1./(1.+exp(-(x))))
+#define dF(x) ((F(x))*(F(-(x))))
+vec2 dU_(vec2 u) {return vec2(F(Aee*u.x-Aei*u.y-He)-u.x,F(Aie*u.x-Aii*u.y-Hi)-u.y);}
+vec4 eigvals(vec2 u) {
+  // u is probably pixel coords in [0,1]^2 or [-.1,1.1]^2
+  // u.x = ν should be the spatial frequency axis, with units of inverse pixels
+  // u.y = ω should be the temporal frequency axis, with units of 1/τ_e
+  float v   = u.x;
+  float se  = Se*v;
+  float si  = Si*v;
+  float Re  = exp(-0.5*se*se);
+  float Ri  = exp(-0.5*si*si);
+  float dUe = dF(Aee*Ue0 - Aei*Ui0 - He);
+  float dUi = dF(Aie*Ue0 - Aii*Ui0 - Hi);
+  float a = (  Aee * Re * dUe * dUe - 1.0)/Te;
+  float b = ( -Aei * Ri * dUe )/Te;
+  float c = (  Aie * Re * dUi )/Ti;
+  float d = ( -Aii * Ri * dUi * dUi - 1.0)/Ti;
+  float r = 0.5*(a+d);
+  float D = (a+d)*(a+d)/4.0 - (a*d-b*c);
+  // Real part determins stability
+  float realdelta = sqrt(max(D,0.0));
+  float r1 = r+realdelta*.866;
+  float r2 = r-realdelta*.5;
+  // D determines frequency when negative
+  float imdelta = sqrt(max(-D,0.0));
+  // In order to plot lines using a pixel shader
+  // We return potential surfaces that cross zero
+  // At the locations where the lines should go. 
+  // The first two return fields handle real eigenvalues (possibly two distinct ones)
+  // The second two return fields handle the imaginary parts of complex-conjugate paired eigenvalues
+  return vec4(
+    F(2.*(r1*Te)) - u.y, 
+    F(2.*(r2*Te)) - u.y, 
+    F(2.*( imdelta*Te)) - u.y, 
+    F(2.*(-imdelta*Te)) - u.y
+  );
+}
+float yticks(float y) {return sin(0.5*log(y/(1.-y))*twopi);}
+void main() { // !!!!!!!!!! COLORMAP
+  vec2  XY  = gl_FragCoord.xy/vec2(W,H);
+  vec2  dx  = vec2(PADFACTOR*1.0/float(W),0.0)*dpi;
+  vec2  dy  = vec2(0.0,PADFACTOR*1.0/float(H))*dpi;
+  vec2  zm  = mod(XY,1.); // xy pixel coords in [0,1]^2
+  vec4  uep = texture2D(Uep,zm);
+  vec4  uip = texture2D(Uip,zm);
+  vec4  uem = texture2D(Uem,zm);
+  vec4  uim = texture2D(Uim,zm);
+  if (XY.y>1.) {// Top half of screen: draw neural fields as colors
+    if (XY.x<1.) {
+      //gl_FragColor = vec4( (uep/(uep+uem)).rgb, 1.0 );
+      // (+) channels: Light, Yellow, Red
+      // (-) channels: Dark,  Blue,   Green
+      vec2 yb  = normalize(vec2(uep.y,pow(uem.y,1.2)));
+      vec2 rg  = normalize(vec2(uep.z,uem.z));
+      vec3 rgb = normalize(vec3(rg*yb.x,yb.y));
+      if (uep.x>=uem.x) {
+        float a = uem.x/(uep.x+uem.x)*2.0;
+        a = pow(a,0.75);
+        gl_FragColor = vec4(rgb*a+(1.0-a)*vec3(1.0),1.0);
+      } else {
+        float a = uep.x/(uep.x+uem.x)*2.0;
+        a = pow(a,0.75);
+        gl_FragColor = vec4(rgb*a+(1.0-a)*vec3(0.0),1.0);
+      }
+    } else {
+      vec4 mue = (uep+uem)*0.5;
+      vec4 mui = (uip+uim)*0.5;
+      float me = (uep.r+uep.g+uep.b)/3.0;
+      float mi = (uip.r+uip.g+uip.b)/3.0;
+      gl_FragColor = vec4(me,mi,3.0*abs(me-mi),1.0);
+    }
+  } 
+  // Bottom half of screen: Histograms, nullclines, eigenvalue plots
+  else {
+    // Shrink pixel coordinates to inset plots
+    zm = (zm-0.5)*PADFACTOR+0.5;
+    if (zm!=clamp(zm,0.,1.)) {gl_FragColor = vec4(0.0); return;}
+    // Pixel coordinates zm are still in [0,1]^2
+    // We'd just now restricted ourself to an inset region; OVERFLOW is 0.1
+    // This extends the domain by 10% beyond the [0,1]^2
+    zm = zm*(1.+2.*OVERFLOW)-OVERFLOW;
+    dx = dx*(1.+2.*OVERFLOW);
+    dy = dy*(1.+2.*OVERFLOW);
+    // Pixel coordinates are now in [-.1,1.1]^2
+    // The extra padding makes for nicer nullcline plots
+    // Bottom left: Draw nullclines with state density histogram 
+    if (XY.x<1.) {
+      vec2 zm2 = clamp(zm,0.,1.);
+      vec4 d   = (zm.x==zm2.x&&zm.y==zm2.y)? texture2D(hist,clamp(zm,0.,1.))*1.: vec4(0.);
+      // Nullclines assuming steady-state adaptation
+      vec2 dU  = dU_(zm);
+      vec2 dUy = dU_(zm+dy);
+      vec2 dUx = dU_(zm+dx);
+      vec2 signs = vec2(lessThanEqual(min(dU*dUx,dU*dUy),vec2(0.0,0.0)));
+      vec4 c3  = vec4(clamp(signs.y+signs.x,0.0,1.0));
+      // EI cells are magenta, cyan
+      vec4 newcolor = vec4(0.0,0.7,0.7,0.0)*signs.y + vec4(1.0,0.0,0.7,0.0)*signs.x;
+      gl_FragColor = d + c3*(newcolor-d);
+    }
+    // Bottom right: Draw dispersion relation from linearized system 
+    else if (XY.x>1.) {
+      vec2 zm2   = clamp(zm,0.,1.);
+      if (zm.x==zm2.x&&zm.y==zm2.y) { 
+        vec4 dU  = eigvals(zm);
+        vec4 dUy   = eigvals(zm+dy);
+        vec4 dUx   = eigvals(zm+dx);
+        vec4 signs = vec4(lessThanEqual(min(dU*dUx,dU*dUy),vec4(0.,0.,0.,0.)));
+        gl_FragColor.rgb = 
+          vec3(.8,.2,.6)*min(signs.x+signs.y,1.0) + 
+          vec3(.2,.8,.6)*min(signs.z+signs.w,1.0) + 
+          // Sigmoid-wrapped y ticks
+          vec3(.3,.3,.3)*float(yticks(zm.y)*yticks(zm.y+dy.y)<=0.&&abs(zm.y-.5)<.48)+
+          // Zero line
+          vec3(1.,1.,1.)*float((zm.y<0.5)&&(zm.y+dy.y>=0.5));
+      }
+    }
+  }
+}
+</script>
+</head>
+
+<body onload="javascript:waitForMathJax()">
+<div class="overlay"style="margin:auto auto; height:100%; width:100%; font-size:80%;" id="hidingframe"><div class="outer"><div class="middle"><center>Please wait while the simulation loads<br/>This page requires WebGL, JavaScript, and access to the MathJax servers.<br/><br/><img src="loader.gif"/></center></div></div></div>
+
+<div class="clickblocker"style="margin:auto auto; height:100%; width:100%;" id="clickblock"> </div>
+
+<div class="outer" id="mainframe">
+<div class="middle">
+<div id='canvasdiv'>
+  <div class="ctlbox"style="font-size:80%;position:relative;">
+    <div style="clear:both;display:block">
+      <div class="ctls"><div class="ctltext">Inhibitory</div></div>
+      <div class="ctls"><div class="ctltext">Excitatory</div></div>
+    </div>
+    <div class="ctltext">Spatial spread</div><div style="clear:both;display:block">
+      <div class="ctls"><div class="ctl">$\sigma_i$<input type="number"step="0.1"max="100"min="0"name="Si"value="1.5"/></div></div>
+      <div class="ctls"><div class="ctl">$\sigma_e$<input type="number"step="0.1"max="100"min="0"name="Se"value="0.6"/></div></div>
+    </div>
+    <div class="ctltext">Lateral coupling strengths ($\sigma_{e,i}$)</div><div style="clear:both;display:block">
+      <div class="ctls">
+        <div class="ctl">$a_{ii}$<input type="number"step="0.1"max="100"min="0"name="Aii"value="3.0"/></div>
+        <div class="ctl">$a_{ie}$<input type="number"step="0.1"max="100"min="0"name="Aie"value="12.0"/></div>
+      </div><div class="ctls">
+        <div class="ctl">$a_{ee}$<input type="number"step="0.1"max="100"min="0"name="Aee"value="10.0"/></div>
+        <div class="ctl">$a_{ei}$<input type="number"step="0.1"max="100"min="0"name="Aei"value="8.5"/></div>
+      </div>
+    </div>
+    <div class="ctltext">Red-Green channel coupling </div><div style="clear:both;display:block">
+      <div class="ctls"><div class="ctl">$o_{ie}$<input type="number"step="0.1"max="100"min="0"name="Oie"value="1.0"/></div></div>
+      <div class="ctls"><div class="ctl">$o_{ee}$<input type="number"step="0.1"max="100"min="0"name="Oee"value="0.0"/></div></div>
+    </div>
+    <div class="ctltext">Time constants (ms)</div><div style="clear:both;display:block">
+      <div class="ctls"><div class="ctl">$\tau_i$<input type="number"step="0.1"max="100"min="0"name="Ti"value="20.0"/></div></div>
+      <div class="ctls"><div class="ctl">$\tau_e$<input type="number"step="0.1"max="100"min="0"name="Te"value="10.0"/></div></div>
+    </div>
+    <div class="ctltext">Thresholds</div><div style="clear:both;display:block">
+      <div class="ctls"><div class="ctl">$\theta_i$<input type="number"step="0.025"max="100"min="-100"name="Hi"value="3.5"/></div></div>
+      <div class="ctls"><div class="ctl">$\theta_e$<input type="number"step="0.025"max="100"min="-100"name="He"value="2.0"/></div></div>
+    </div>
+    <div class="ctltext">Stimulus gain</div><div style="clear:both;display:block">
+      <div class="ctls"><div class="ctl">$g_i$<input type="number"step="0.1"max="100"min="-100"name="Gi"value="0.0"/></div></div>
+      <div class="ctls"><div class="ctl">$g_e$<input type="number"step="0.1"max="100"min="-100"name="Ge"value="0.8"/></div></div>
+    </div>
+    <div class="ctltext">Noise</div><div style="clear:both;display:block">
+      <div class="ctls"><div class="ctl">$N_e$<input type="number"step="0.1"max="100"min="0"name="Ne"value="0.1"/></div></div>
+    </div>
+    <div class="ctltext">Stimulation</div><div style="clear:both;display:block">
+      <div class="ctls">
+        <div class="ctl">$A$<input type="number"step="0.1"max="100"  min="-100"name="Amp"value="0.5"/></div>
+        <div class="ctl">$f$<input type="number"step="1"max="1000"min="0"name="f"value="50.0"/></div>
+      </div>
+      <div class="ctls">
+        <div class="ctl">size<input type="number"step="0.1"max="1"min="0.1"name="stimsize"value="0.3"/></div>
+        <div class="ctl">where<input type="number"step="0.1"max="1"min="0"name="stimradius"value="0.7"/></div>
+        <div class="ctl">wave<div class="checkbutton" id="wavetoggle">square</div></div>
+      </div>
+    </div>
+    <div class="ctltext">Time stepping</div>
+    <div style="clear:both;display:block">
+      <div class="ctls"><div class="ctl">skip<input type="number"step="1"max="100"  min="0"name="tskip"value="1"/></div></div>
+      <div class="ctls"><div class="ctl">$\Delta t$<input type="number"step="0.1"max="100"  min="0"name="dt"value="2.0"/></div></div>
+    </div>
+  </div>
+
+  <div style="position:relative;">
+    <canvas id='maincanvas' style="position:absolute; left:200px; z-index: 1;"> 
+      This application uses the HTML5 Canvas element and Javascript.
+      If you're seeing this, javascript may be disabled.
+    </canvas>
+    <!-- title plot top    left --><div id="axAtitle" class="title">Red/Green E cell Dominance</div>
+    <!-- title plot top    right--><div id="axBtitle" class="title">Overall local E-I tone    </div>  
+    <!-- title plot bottom left --><div id="ax1title" class="axislabel">Phase space (steady-state $V_{e,i}$)</div>   
+    <!-- title plot bottom right--><div id="ax2title" class="axislabel">Eigval: <b><font color="#c39">Re</font>; <font color="#3c9">Im</font></b></div>
+    <!-- x label bottom left --><div id="ax1xlabel" class="axislabel"><b><font color="#F08">E-cell</font></b> firing rate</div>
+    <!-- y label bottom left --><div id="ax1ylabel" class="axislabel"><b><font color="#0BB">I-cell</font></b> firing rate</div>
+    <!-- y label bottom left --><div id="ax1ytick0" class="axislabel">0</div>
+    <!-- y label bottom left --><div id="ax1ytick1" class="axislabel">1</div>
+    <!-- x label bottom left --><div id="ax1xtick0" class="axislabel">0</div>
+    <!-- x label bottom left --><div id="ax1xtick1" class="axislabel">1</div>
+    <!-- x label bottom right--><div id="ax2xlabel" class="axislabel">Angular spatial frequency (1/pixels)</div>
+    <!-- y label bottom right--><div id="ax2ylabel" class="axislabel">Temporal frequency; Lines: multiples of $1/\tau_e$</div>
+    <div id='canvasoverlay' style="position:absolute; left:200px; z-index:4;">
+      <div style="display: table-cell; vertical-align: middle;">Click to start</div>
+    </div>
+
+    <div id="equation"><div style="text-align:center;">
+      \[\begin{aligned}\text{(LaTex goes here)}&&\\\end{aligned}\]
+    </div></div>
+
+    <!-- Invisible overlay of bottom left phase plane to detect mouse over -->
+    <div id='phaseoverlay' style='position:absolute;bottom:-512px;left:200px;width:256px;height:256px;z-index:3;background:#00000000;'>
+      <div id="lilbox"style="position:relative;width:10px;height:10px;background:#00000000;border:solid 1px #777;z-index:5;left:0px;top:0px;pointer-events:none;">
+      </div>
+    </div>
+
+  </div>
+  <!-- just here for padding -->
+  <div id="infotext" class="infotext">
+    <h3 style="margin-top:0px;">Wave State Demonstration</h3>
+    <span style="font-size:80%;">This code uses webGL shaders and encodes floats as 8-bit fixed point in an ad-hoc way. Results are for demonstration and exploration only and not accurate.<br/><br/></span>
+    <div class="ctltext"style="width:240px;">Simulation</div>
+    <div class="button_container">
+      <input class="button" type="button"value="Start"/>
+      <input class="button" type="button"value="Step"/>
+      <input class="button" type="button"value="Save"/>
+      <input class="button" type="button"value="Load"/>
+      <input class="button" type="button"value="Randomize"/>
+    </div>
+    <div class="ctltext">Presets</div><div class="button_container" id="presets"></div>
+  </div>
+</div>
+</div>
+</div>
+
+<script type="text/javascript">
+//['Rule Stoffregen Ermentrou 2011 A',''].
+//['Rule Stoffregen Ermentrou 2011 B',''].
+presets=[
+['flicker: spots',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2.5;Se=1;Sl=0;Aii=3;Aie=11;Aee=10;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ne=0;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=.7;f=8;stimsize=100;stimradius=0;tskip=1;dt=1.0;bradius=100;bhardness=1;Oee=0.0;Oie=1.0'],
+['flicker: stripes',
+'waveform="square";Wii=0;Wie=0;Wee=0;Wei=0;Si=2;Se=1;Sl=0;Aii=3;Aie=11;Aee=10.5;Aei=8.5;Ti=20;Te=10;Hi=3.5;He=2;Gi=0;Ge=1;Ne=0.2;ai=1;bi=0;ae=1;gammae=100;be=0;Amp=0.6;f=18;stimsize=100;stimradius=0;tskip=1;dt=1.0;bradius=100;bhardness=1;Oee=0.0;Oie=1.0'],
+]
+
+function main() {
+  console.log('Initializing...');
+
+  var hidingframe   = $('hidingframe');
+  var canvasoverlay = $('canvasoverlay');
+  var clickblock    = $('clickblock');
+  var frame         = $('canvasdiv');
+  var canvas        = $('maincanvas');
+  var phaseoverlay  = $('phaseoverlay');
+  var lilbox        = $('lilbox');
+  
+  const N        = 256;
+  const sidebars = 200;
+  const pad      = 1.0;
+  const overflow = 0.1;
+  const N1       = N+1;
+  const Ue_cpu_buffer = new Float32Array(N1*N1);
+  const Ui_cpu_buffer = new Float32Array(N1*N1);
+  
+  //const downscale = 0;
+  //const W   = canvas.clientWidth >>downscale;
+  //const H   = canvas.clientHeight>>downscale;
+  const K = 2*N;
+  const W = K;
+  const H = K;
+  canvas.width  = W;
+  canvas.height = H;
+  maincanvas.style.width  = W;
+  maincanvas.style.height = H;
+  console.log('W='+W,'H='+H)
+  
+  frame.style.width = K+2*sidebars;
+  clickblock.style.width     = K;
+  clickblock.style.height    = K;
+  canvasoverlay.style.width  = K;
+  canvasoverlay.style.height = K;
+  
+  var v = $('axAtitle' ); v.style.left   = sidebars+'px';   v.style.width = N+'px';
+  var v = $('axBtitle' ); v.style.left   = sidebars+N+'px'; v.style.width = N+'px';
+  var v = $('ax1title' ); v.style.bottom = -N-20+'px';      v.style.left  = sidebars+'px'; v.style.width = N+'px';
+  var v = $('ax1xlabel'); v.style.bottom = -K+'px';         v.style.left  = sidebars+'px'; v.style.width = N+'px';
+  var v = $('ax1ylabel'); v.style.bottom = (N/2-K-10)+'px'; v.style.left  = (sidebars-N/2+10)+'px'; v.style.width=N+'px';
+  //<!-- y-axis label for plot on bottom left 512-.1/(1.2/256) -->
+  var v = $('ax1ytick0'); 
+  v.style.bottom = -(K-overflow/((1+2*overflow)/N)) + 'px';
+  v.style.left  = (sidebars-N/2+10) + 'px';
+  v.style.width = N + 'px';
+  //<!-- y-axis label for plot on bottom left 512-1.1/(1.2/256) -->
+  var v = $('ax1ytick1');
+  v.style.bottom = -(K-(1+overflow)/((1+2*overflow)/N)) + 'px';
+  v.style.left  = (sidebars-N/2+10) + 'px';
+  v.style.width = N + 'px';
+  //<!-- x-axis label for plot on bottom left 200+.1/(1.2/256) = 221.33333333333334 -->
+  var v = $('ax1xtick0');
+  v.style.bottom = -K + 'px';
+  v.style.left = (sidebars+N*overflow/(1+2*overflow)-N/2) + 'px';
+  v.style.width = N + 'px';
+  //<!-- x-axis label for plot on bottom left 200+1.1/(1.2/256) = 434.6666666666667 -->
+  var v = $('ax1xtick1');
+  v.style.bottom = -K + 'px';
+  v.style.left = (sidebars+N*(1+overflow)/(1+2*overflow)-N/2) + 'px';
+  v.style.width = N + 'px';
+  // <!-- title for plot on bottom right -->
+  var v = $('ax2title');
+  v.style.bottom = -(N+20) + 'px';
+  v.style.left = (N+sidebars) + 'px';
+  v.style.width = N + 'px';
+  // <!-- x-axis label for plot on bottom right -->
+  var v = $('ax2xlabel');
+  v.style.bottom = -(K) + 'px';
+  v.style.left = (N+sidebars) + 'px';
+  v.style.width = N + 'px';
+  // <!-- y-axis label for plot on bottom right -->
+  var v = $('ax2ylabel');
+  v.style.bottom = (N/2-K-10) + 'px';
+  v.style.left = (sidebars+10+N/2) + 'px';
+  v.style.width = N + 'px';
+  var v = $('equation').style;
+  v.left = sidebars;
+  v.top = K;
+  v.width = K;
+  
+
+  var gl = getRasterGL(canvas);
+  // bit of a hack
+  gl.width = gl.height = N;
+
+  var dt  = 1.0;     // Euler integrator time step
+  var tskip    = 1;  // Frames to skip between drawing
+  
+  var Te  = 10.0;    // Excitatory population time constant (ms)
+  var Ti  = 10.0;    // Inhibitory population time constant (ms)
+  var Se  = 3.0;     // Excitatory population spread
+  var Si  = 5.0;     // Inhibitory population spread
+  var Aee = 4;       // E-E coupling Weight
+  var Aie = 4;       // Excitation of Inhibitory coupling Weight
+  var Aei = 4;       // Inhibition of Excitatory coupling Weight
+  var Aii = 0;       // I-I coupling Weight
+  var He  = 2;       // Bias in E cell synaptic input (threshold)
+  var Hi  = 2;       // Bias in I cell synaptic input (threshold)
+  var Ne  = 0;       // Noise level (uniform) in E cells
+  var Ge  = 1;       // Input drive to E cells
+  var Gi  = 0;       // Input drive to I cells
+  var Oee = 0;       // E-E coupling Weight (cross-channel)
+  var Oie = 1.0;     // Excitation of Inhibitory coupling Weight (cross-channel)
+  var f   = 10;      // Stim frequency Hz
+  var Amp = 0;       // Amplitude of stimulus
+  var Str = 0.8;     // Sinusoidal input stimulus is thresholded
+  var Ue0 = 0.5;     // Fixed point to linearize around (E part)
+  var Ui0 = 0.5;     // Fixed point to linearize around (I part)
+  var waveform   = "square";
+  
+  var waveformtoggle = $('wavetoggle');
+  waveformtoggle.onclick =()=>{waveform = (waveform=="square")? "sine":"square";waveformtoggle.innerHTML = waveform;}
+  
+  // Stimulus
+  const heav = (z)=>(z<.0?.0:z==.0?.5:1.);
+  const Stim = (t)=> ((waveform=="square")? heav(Math.sin(2*Math.PI*t*f/1000.)-Str) : (Math.sin(2*Math.PI*t*f/1000.) )+1)*0.5*Amp;
+  const F  = (x)=>1/(1+Math.exp(-x));
+  const dF = (x)=>F(x)*F(-x);
+  
+  function follow() {
+    // Update Ue0 Ui0 to nearest fixed point
+    // We will use the steady-state adaptation and DC mode approximation.
+    // Recalculate derivatives
+    for (var iy=0; iy<=N; iy++) {
+      for (var ix=0; ix<=N; ix++) {
+        let Ue = iy/N*(1+2*overflow)-overflow;
+        let Ui = ix/N*(1+2*overflow)-overflow;
+        let i  = ix + N1*iy;
+        Ue_cpu_buffer[i] = F(Aee*Ue-Aei*Ui-He)-Ue;
+        Ui_cpu_buffer[i] = F(Aie*Ue-Aii*Ui-Hi)-Ui;
+      }
+    }
+    // Locate nullcline intersections
+    let Ue0_ = Ue0 | 0.5;
+    let Uei_ = Ui0 | 0.5;
+    let Ue_new = Ue0_;
+    let Ui_new = Uei_;
+    let best_D = null;
+    for (var iy=0; iy<N; iy++) {
+      for (var ix=0; ix<N; ix++) {
+        let i   = ix + N1*iy;
+        let idx = i + 1;
+        let idy = i + N1;
+        a = Ue_cpu_buffer[i  ]<0;
+        b = Ue_cpu_buffer[idx]<0;
+        c = Ue_cpu_buffer[idy]<0;
+        let Ue_null = (a!=b)|(a!=c);
+        a = Ui_cpu_buffer[i  ]<0;
+        b = Ui_cpu_buffer[idx]<0;
+        c = Ui_cpu_buffer[idy]<0;
+        let Ui_null = (a!=b)|(a!=c);
+        if (Ue_null && Ui_null) {
+          let Ue = iy/N*(1+2*overflow)-overflow;
+          let Ui = ix/N*(1+2*overflow)-overflow;
+          let D = Math.hypot(Ue-Ue0,Ui-Ui0);
+          if (best_D==null || D<best_D) {
+            Ue_new = Ue;
+            Ui_new = Ui;
+            best_D = D;
+          }
+        }
+      }
+    }
+    console.log('Ue0,Ui0 was '+Ue0+', '+Ui0+'; set to '+Ue_new+', '+Ui_new);
+    Ue0 = Ue_new;
+    Ui0 = Ui_new;
+    // Ue0 and Ui0 may range from -overflow to 1+overflow
+    let x = Ue0;
+    let y = Ui0;
+    // Convert to normalized [0,1] coordiantes
+    x = (x+overflow)/(1+2*overflow);
+    y = (y+overflow)/(1+2*overflow);
+    // Flip y axis
+    y = 1-y;
+    // (x,y) are now in normalized [0,1]² coordinates
+    // where "0" is -overflow and "1" is 1+overflow
+    x = N/2+(x*N-N/2)/pad;
+    y = N/2+(y*N-N/2)/pad;
+    // (x,y) are now in relative pixel coordiantes
+    lilbox.style.left = (x-7)+'px';
+    lilbox.style.top  = (y-7)+'px';
+  }
+  // Track mouse position to report local linearization of equations
+  phaseoverlay.onmousedown = (e) => {
+    let rect = e.target.getBoundingClientRect();
+    let x = e.clientX - rect.left; //x position within the element.
+    let y = e.clientY - rect.top;  //y position within the element.
+    let x2 = (x-N*.5)*pad+N*.5;
+    let y2 = ((N-y)-N*.5)*pad+N*.5;
+    if (x2>=0 && y2>=0 && x2<N && y2<N) {
+      let Ue = x2/N;
+      let Ui = y2/N;
+      Ue0 = Ue;
+      Ui0 = Ui;
+      compile_kernel();
+    }
+  };
+  
+  var running = 0;
+
+  // GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_MIRRORED_REPEAT,
+  // GL_REPEAT, or GL_MIRROR_CLAMP_TO_EDGE
+  //var clip_mode = gl.GL_MIRROR_CLAMP_TO_EDGE;
+  var clip_mode = gl.GL_REPEAT;
+  
+  var temp1 = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var temp2 = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var temp3 = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var temp4 = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  
+  var Uep   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var Uem   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var Uip   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var Uim   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var Cep   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var Cem   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var Cip   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var Cim   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var noise = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  
+  var all_buffers = [Uep,Uem,Uip,Uim,Cep,Cem,Cip,Cim,noise];
+  
+  
+  var hist   = newBasicFramebuffer(gl,{wrap : clip_mode, size:N});
+  var dohist = getRasterProgram(gl,'histogram');
+  var copy   = GPUcopy(gl,N,N);
+  var hblur  = GPUGaussianBlur(gl,5.0); // Histogram blur
+  var eblur  = GPUGaussianBlur(gl,0.5); // E cell blur
+  var iblur  = GPUGaussianBlur(gl,0.5); // I cell blur
+  var gpurng = GPUNoise(gl); // noise kernel
+  var rand   = WeakRNG();
+
+  // compiled later after initialization
+  var wc_kernel_e; 
+  var wc_kernel_i; 
+  var color;
+  randomize();
+  
+  // Put parameters in kernel at compile time
+  function compile_kernel() {
+    try {for (var i=0; i<ctls.length; i++) {var ctl = ctls[i]; eval(ctl.name+'='+ctl.value);}}
+    catch (err) {console.log(err.message);}
+    
+    // Move the fixed point Ue0 Ui0 to nearest actual fixed point.
+    follow();
+    
+    // Update blur shaders for current interaction radii Se, Si, Sl
+    eblur = GPUGaussianBlur(gl,Se);
+    iblur = GPUGaussianBlur(gl,Si);
+    var wc_header = compile_bind(
+      get_parameters('wc_kernel-parameters'), {
+      dt : dt,  // Euler integrator time step
+      Te : Te,  // Excitatory population time constant (ms)
+      Ti : Ti,  // Inhibitory population time constant (ms)
+      Aee: Aee, // E-E coupling
+      Aie: Aie, // Excitation of Inhibitory coupling
+      Aei: Aei, // Inhibition of Excitatory coupling
+      Aii: Aii, // I-I coupling
+      Oee: Oee, // E-E coupling (opponent)
+      Oie: Oie, // Excitation of Inhibitory coupling (opponent)
+      He : He,  // Bias in E cell synaptic input
+      Hi : Hi,  // Bias in I cell synaptic input
+      Ge : Ge,  // Simulation gain for e cells
+      Gi : Gi,  // Simulation gain for i cells
+      Ne : Ne,  // Noise level (uniform) in E cells
+    })[0];
+    wc_kernel_e = buildRasterProgram(gl,wc_header+$('wc_kernel_e').text);
+    wc_kernel_i = buildRasterProgram(gl,wc_header+$('wc_kernel_i').text);
+    var color_header = compile_bind(
+        get_parameters('colormap-parameters'), {
+        Aee: Aee, // E-E coupling
+        Aie: Aie, // Excitation of Inhibitory coupling
+        Aei: Aei, // Inhibition of Excitatory coupling
+        Aii: Aii, // I-I coupling
+        Se : Se,  // Standard deviation of E-cell long-range coupling
+        Si : Si,  // Standard deviation of I-cell long-range coupling
+        Te : Te,  // Time constant for E cells
+        Ti : Ti,  // Time constant for I cells
+        He : He,  // Bias in E cell synaptic input (threshold)
+        Hi : Hi,  // Bias in I cell synaptic input (threshold)
+        Ue0: Ue0, // Perturbation point E axis
+        Ui0: Ui0, // Perturbation point I axis
+    })[0];
+    color = buildRasterProgram(gl,color_header+$('colormap').text);
+  }
+
+  function nothing()   {}
+  function randomize() {all_buffers.forEach((x,i)=>{gpurng.randomize(x);});}
+
+  var inputs = document.getElementsByTagName("input");
+  var ctls = [];
+  
+  for (var i=0; i<inputs.length; i++) if (inputs[i].type=='number') {
+    ctls.push(inputs[i]);
+    var input = inputs[i];
+    input.addEventListener('input',compile_kernel);
+  }
+    
+  function setctls() {
+    for (var i=0; i<ctls.length; i++) {var c=ctls[i]; eval('c.value='+c.name);}
+    // waveform button is a special case
+    waveformtoggle.innerHTML = waveform;
+    compile_kernel();
+  }
+
+  var buttons = [];
+  var stopstartbutton;
+  for (var i=0; i<inputs.length; i++) {
+    var button = inputs[i];
+    if (button.type=='button') {
+      buttons.push(button);
+      button.onclick = (function(button){return function(click) {
+        eval(button.value.replace(/\s/g,'').toLowerCase()+'()');
+      };})(button);
+      if (button.value=='Start') {
+        stopstartbutton=button;
+        button.style.width = button.offsetWidth;
+      }
+    }
+  }
+  function start() {
+    if (!running) setTimeout(iterate, 0);
+    running = 1;
+    stopstartbutton.value = "Stop";
+    canvasoverlay.style.display = "none";
+  }
+  function stop() {running = 0; stopstartbutton.value = "Start";}
+  function step() {stop(); iterate();}
+  function statestring() {
+    var state='waveform="'+waveform+'";';
+    for (var i=0; i<ctls.length; i++) {var ctl = ctls[i]; state += ctl.name+'='+ctl.value+';';}
+    return state;
+  }
+  function save() {
+    var wasrunning = running;
+    stop();
+    prompt("Copy (ctl+C) these parameters & record them.\n"+
+      "They can be reloaded using the 'Load' button.\n", statestring());
+    if (wasrunning) start();
+  }
+  function loadstring(s) {eval(s); setctls(); randomize(); start();}
+  function load() {
+    stop();
+    result = prompt("Paste saved parameters below:\n","");
+    if (result) loadstring(result);
+  }
+
+  preset_container = $('presets');
+  for (var i=0; i<presets.length; i++) {
+    var name = presets[i][0];
+    var pdat = presets[i][1];
+    var ps = document.createElement("div");
+    ps.setAttribute("class","squarebutton");
+    ps.innerHTML = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzαβγδεφθιηκλμνπϟρστυωξζ'[i];
+    var st = document.createElement("div");
+    st.setAttribute("class","info");
+    st.innerHTML = name;
+    ps.appendChild(st);
+    ps.onclick = (function(name,pdat){
+      return function() {randomize(); eval(pdat); setctls(); console.log(name); start();};})(name,pdat);
+    preset_container.appendChild(ps);
+  }
+  console.log('Presets loaded');
+
+  console.log
+  eval(presets[0][1]);
+  setctls();
+
+  var timestep = 0;
+  function iterate() {
+    try {
+      for (var i=0; i<tskip; i++) {
+        if (Ne>0) gpurng(noise,temp1);
+        
+        // `blur` : lateral σe, σi lateral coupling 
+        eblur(Uep,temp1,Cep);
+        eblur(Uem,temp1,Cem);
+        iblur(Uip,temp1,Cip);
+        iblur(Uim,temp1,Cim);        
+        
+        // Update all, saving new values in temporary buffers
+        var st = Stim(timestep*dt);
+        wc_kernel_e({Uep:Uep,Uem:Uem,Uip:Uip,Uim:Uim,Cep:Cep,Cem:Cem,Cip:Cip,Cim:Cim,noise:noise,s:st},temp1);
+        wc_kernel_i({Uep:Uep,Uem:Uem,Uip:Uip,Uim:Uim,Cep:Cep,Cem:Cem,Cip:Cip,Cim:Cim,noise:noise,s:st},temp2);
+        wc_kernel_e({Uep:Uem,Uem:Uep,Uip:Uim,Uim:Uip,Cep:Cem,Cem:Cep,Cip:Cim,Cim:Cip,noise:noise,s:st},temp3);
+        wc_kernel_i({Uep:Uem,Uem:Uep,Uip:Uim,Uim:Uip,Cep:Cem,Cem:Cep,Cip:Cim,Cim:Cip,noise:noise,s:st},temp4);
+        copy(temp1,Uep);
+        copy(temp2,Uip);
+        copy(temp3,Uem);
+        copy(temp4,Uim);
+        
+        timestep += 1;
+      }
+      dohist({Ue:Uep,Ui:Uip},temp1); hblur(temp1,temp2,temp1);
+      color({
+        Uep:Uep,Uip:Uip,Uem:Uem,Uim:Uim,
+        dpi: Math.max(1,Math.ceil(1./window.devicePixelRatio)),
+        hist:temp1});
+    } catch (err) {console.log(err.message);}
+    if (running) requestAnimationFrame(iterate);
+  }
+
+  hidingframe.style.display = "none";
+  clickblock.style.display  = "none";
+  clickblock.style.cursor   = "pointer";
+  var startfun = function(e) {
+    canvasoverlay.style.display = "none";
+    clickblock.style.display  = "none";
+    start();
+  };
+  clickblock.onclick  = startfun;
+  canvasoverlay.onclick = startfun;
+
+  console.log('Initialization complete');
+}
+
+function waitForMathJax()
+{
+  console.log('Waiting for MathJax to load');
+  try {
+    MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
+    MathJax.Hub.Queue(main);
+  } catch(e) {
+    console.log('MathJax is missing, continuing without it');
+    main();
+  }
+}
+</script>
+</body>
+</html>
+
+
